@@ -260,12 +260,12 @@ export SSH_OPS_CLI="$HOME/.local/bin/sshctl"
 sshctl update
 ```
 
-它会告诉你当前版本、检测到的安装目标，以及对应的一键更新命令。
+它会直接执行更新。
 
-macOS / Linux 上如果想直接开始更新，可以继续执行：
+如果你只是想先看看它准备执行什么命令，而不立刻更新：
 
 ```bash
-sshctl update --apply
+sshctl update --check
 ```
 
 如果你明确只想更新某个目标，也可以显式指定：
@@ -280,8 +280,10 @@ sshctl update --all
 
 ```bash
 sshctl update --version v0.1.4
-sshctl update --apply --version v0.1.4
+sshctl update --check --version v0.1.4
 ```
+
+Windows 目前仍然会打印出更新命令，让你复制执行；macOS / Linux 会直接更新。
 
 ## 配置
 
@@ -586,7 +588,7 @@ sshctl download \
 
 ```bash
 sshctl update
-sshctl update --apply
+sshctl update --check
 ```
 
 ### 方式二：在 Codex CLI 里用 skill

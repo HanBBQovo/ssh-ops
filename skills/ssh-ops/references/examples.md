@@ -34,7 +34,7 @@ sshctl remove
 
 ```bash
 sshctl update
-sshctl update --apply
+sshctl update --check
 ```
 
 ## 最短路径：直接连一台机器

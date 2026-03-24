@@ -624,7 +624,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  remove           从列表里选一台服务器并删除")
 	fmt.Fprintln(w, "  show             查看某一台服务器")
 	fmt.Fprintln(w, "  test             测试一台服务器能不能连通")
-	fmt.Fprintln(w, "  update           查看或执行更新命令")
+	fmt.Fprintln(w, "  update           直接更新本地安装；加 --check 只查看更新命令")
 	fmt.Fprintln(w, "  run              在一台服务器上执行命令")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "进阶子命令：")

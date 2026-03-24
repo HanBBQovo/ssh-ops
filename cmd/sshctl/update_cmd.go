@@ -11,7 +11,8 @@ import (
 
 func runUpdate(args []string) int {
 	fs := newFlagSet("update")
-	apply := fs.Bool("apply", false, "run the update command immediately")
+	apply := fs.Bool("apply", false, "deprecated alias for the default update behavior")
+	check := fs.Bool("check", false, "show the resolved update command without executing it")
 	versionFlag := fs.String("version", "", "install a specific version tag")
 	codex := fs.Bool("codex", false, "update the Codex install")
 	claude := fs.Bool("claude", false, "update the Claude Code install")
@@ -23,7 +24,7 @@ func runUpdate(args []string) int {
 	detected := detectInstallTargets()
 	targets := resolveInstallTargets(detected, *codex, *claude, *all)
 	command, targetLabel := buildUpdateCommand(targets, strings.TrimSpace(*versionFlag))
-	if !*apply {
+	if *check {
 		fmt.Fprintf(os.Stdout, "当前版本: %s\n", version)
 		fmt.Fprintf(os.Stdout, "检测到的安装目标: %s\n", describeInstallTargets(detected))
 		fmt.Fprintf(os.Stdout, "建议更新目标: %s\n", targetLabel)
@@ -33,20 +34,17 @@ func runUpdate(args []string) int {
 		fmt.Fprintln(os.Stdout, "执行下面的命令即可更新：")
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintln(os.Stdout, command)
-		if runtime.GOOS != "windows" {
-			fmt.Fprintln(os.Stdout, "")
-			fmt.Fprintln(os.Stdout, "如果想直接开始更新，也可以执行：")
-			fmt.Fprintln(os.Stdout, "sshctl update --apply")
-		}
 		return 0
 	}
+	_ = *apply
 
 	if runtime.GOOS == "windows" {
-		fmt.Fprintln(os.Stderr, "Windows 下暂不支持 `sshctl update --apply`。请复制下面的命令手动执行：")
+		fmt.Fprintln(os.Stderr, "Windows 下暂不支持直接自更新。请复制下面的命令手动执行：")
 		fmt.Fprintln(os.Stderr, command)
 		return 1
 	}
 
+	fmt.Fprintf(os.Stdout, "正在更新 %s...\n", targetLabel)
 	cmd := exec.Command("/bin/sh", "-c", command)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
