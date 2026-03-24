@@ -1,0 +1,18 @@
+{
+  "name": "Tail a remote log safely",
+  "skills": ["ssh-ops"],
+  "query": "Use SSH to tail the last 200 lines of the application log from my prod-web host.",
+  "expected_behavior": [
+    "Recognizes that the request is remote SSH work and should use the ssh-ops skill.",
+    "Uses scripts/ssh_exec.sh or sshctl exec instead of inventing an MCP tool call.",
+    "Targets the prod-web host id explicitly.",
+    "Runs a bounded, read-only command such as tail -n 200.",
+    "Returns the host id, command, exit code, and a concise summary of the output."
+  ],
+  "success_criteria": [
+    "The skill chooses SSH execution instead of local shell work.",
+    "The command is bounded and non-interactive.",
+    "The final answer preserves the host id and relevant log summary."
+  ]
+}
+

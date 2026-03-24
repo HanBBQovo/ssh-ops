@@ -1,0 +1,163 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+            archive: tar.gz
+            binary_name: sshctl
+            asset_name: ssh-ops_darwin_amd64.tar.gz
+          - goos: darwin
+            goarch: arm64
+            archive: tar.gz
+            binary_name: sshctl
+            asset_name: ssh-ops_darwin_arm64.tar.gz
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+            binary_name: sshctl
+            asset_name: ssh-ops_linux_amd64.tar.gz
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+            binary_name: sshctl
+            asset_name: ssh-ops_linux_arm64.tar.gz
+          - goos: windows
+            goarch: amd64
+            archive: zip
+            binary_name: sshctl.exe
+            asset_name: ssh-ops_windows_amd64.zip
+          - goos: windows
+            goarch: arm64
+            archive: zip
+            binary_name: sshctl.exe
+            asset_name: ssh-ops_windows_arm64.zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build binary
+        shell: bash
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags "-s -w -X main.version=${{ steps.version.outputs.value }} -X main.commit=${GITHUB_SHA} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "dist/${{ matrix.binary_name }}" ./cmd/sshctl
+
+      - name: Package asset
+        shell: bash
+        run: |
+          mkdir -p release
+          if [[ "${{ matrix.archive }}" == "tar.gz" ]]; then
+            tar -C dist -czf "release/${{ matrix.asset_name }}" "${{ matrix.binary_name }}"
+          else
+            (cd dist && zip -q "../release/${{ matrix.asset_name }}" "${{ matrix.binary_name }}")
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: release/${{ matrix.asset_name }}
+
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create skill tarball
+        shell: bash
+        run: |
+          mkdir -p release/ssh-ops-skill/skills release/ssh-ops-skill/examples
+          cp -R skills/ssh-ops release/ssh-ops-skill/skills/ssh-ops
+          cp examples/config.example.yaml release/ssh-ops-skill/examples/config.example.yaml
+          tar -C release -czf release/ssh-ops-skill.tar.gz ssh-ops-skill
+
+      - name: Create skill zip
+        shell: bash
+        run: |
+          (cd release && zip -qr ssh-ops-skill.zip ssh-ops-skill)
+
+      - name: Upload skill tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-ops-skill-targz
+          path: release/ssh-ops-skill.tar.gz
+
+      - name: Upload skill zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-ops-skill-zip
+          path: release/ssh-ops-skill.zip
+
+  publish:
+    needs:
+      - build
+      - bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Flatten assets
+        shell: bash
+        run: |
+          mkdir -p publish
+          find release-assets -type f -maxdepth 2 -exec cp {} publish/ \;
+          ls -la publish
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.value }}
+          name: ${{ steps.version.outputs.value }}
+          files: publish/*
+          draft: false
+          prerelease: false
+

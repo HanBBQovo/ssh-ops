@@ -1,0 +1,28 @@
+version: "1"
+
+defaults:
+  connect_timeout_sec: 10
+  operation_timeout_sec: 120
+  max_output_bytes: 1048576
+  shell: "bash"
+
+policy:
+  allow_patterns: []
+  deny_patterns: []
+
+hosts:
+  - id: "prod"
+    name: "Production"
+    address: "203.0.113.10"
+    port: 22
+    user: "deploy"
+    auth:
+      private_key_path: "~/.ssh/id_ed25519"
+      passphrase_env: "SSH_OPS_PROD_KEY_PASSPHRASE"
+      # password_env: "SSH_OPS_PROD_PASSWORD"
+    host_key:
+      mode: "known_hosts"
+      known_hosts_path: "~/.ssh/known_hosts"
+    defaults:
+      workdir: "/srv/app"
+

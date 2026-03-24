@@ -1,0 +1,17 @@
+{
+  "name": "Upload a release artifact",
+  "skills": ["ssh-ops"],
+  "query": "Upload ./dist/release.tar.gz to /tmp/release.tar.gz on the staging host.",
+  "expected_behavior": [
+    "Recognizes that the task is an SFTP upload, not remote shell execution.",
+    "Uses scripts/ssh_upload.sh or sshctl upload.",
+    "Preserves the local path and remote path exactly.",
+    "Keeps overwrite behavior explicit instead of assuming it."
+  ],
+  "success_criteria": [
+    "The skill uses the upload path rather than wrapping the transfer inside a shell command.",
+    "The response includes the host id and destination path.",
+    "The skill does not invent extra deployment steps."
+  ]
+}
+
