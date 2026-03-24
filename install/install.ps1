@@ -158,9 +158,12 @@ try {
     Write-Host "- 配置目录：$ConfigDir"
     Write-Host ""
     Write-Host "下一步："
-    Write-Host "1. 编辑 $configTarget"
-    Write-Host "2. 运行：sshctl validate-config --pretty"
-    Write-Host "3. 重启 Codex / Claude Code，或开启一个新会话"
+    Write-Host "1. 先运行：sshctl add"
+    Write-Host "2. 想修改已有服务器时运行：sshctl edit"
+    Write-Host "3. 想查看列表时运行：sshctl list"
+    Write-Host "4. 以后升级时运行：sshctl update"
+    Write-Host "5. 需要排查底层配置时再看：$configTarget"
+    Write-Host "6. 重启 Codex / Claude Code，或开启一个新会话"
 } finally {
     if (Test-Path $tmpDir) {
         Remove-Item -Recurse -Force $tmpDir

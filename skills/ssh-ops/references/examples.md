@@ -18,6 +18,25 @@ sshctl test prod
 sshctl run prod "df -h"
 ```
 
+## 不记得别名时，直接编辑
+
+```bash
+sshctl edit
+```
+
+## 删除一台不用的机器
+
+```bash
+sshctl remove
+```
+
+## 更新本地安装
+
+```bash
+sshctl update
+sshctl update --apply
+```
+
 ## 最短路径：直接连一台机器
 
 ```bash
@@ -86,7 +105,7 @@ scripts/ssh_upload.sh \
   --pretty
 ```
 
-## 配置管理示例
+## 高级配置管理示例
 
 下面这些命令已经可用，但它们更偏“进阶配置管理”。新手优先用上面的 `sshctl add`、`sshctl list`、`sshctl test`、`sshctl run`。
 

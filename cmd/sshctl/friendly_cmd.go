@@ -120,6 +120,147 @@ func runList(args []string) int {
 	return 0
 }
 
+func runEdit(args []string) int {
+	fs := newFlagSet("edit")
+	configPath := fs.String("config", "", "config file path")
+	noTest := fs.Bool("no-test", false, "skip the connection test after saving")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	resolvedPath := sshops.ResolveConfigPath(*configPath)
+	cfg, err := sshops.LoadConfigFile(resolvedPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "读取配置失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+	if err := cfg.Normalize(); err != nil {
+		fmt.Fprintf(os.Stderr, "配置无效: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	var selected *sshops.HostConfig
+	if fs.NArg() > 0 {
+		selected = findHostByID(cfg.Hosts, strings.TrimSpace(fs.Arg(0)))
+		if selected == nil {
+			fmt.Fprintf(os.Stderr, "找不到服务器 %q。\n", fs.Arg(0))
+			return 1
+		}
+	} else {
+		selected, err = chooseHost(reader, os.Stdout, cfg.Hosts, "请输入要编辑的服务器序号、别名或显示名称")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+	}
+
+	edited, testAfterSave, err := runEditWizard(reader, os.Stdout, *selected, editWizardOptions{NoTest: *noTest})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "编辑失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+
+	if edited.ID != selected.ID && findHostByID(cfg.Hosts, edited.ID) != nil {
+		fmt.Fprintf(os.Stderr, "已经存在服务器 %q，请换一个名字。\n", edited.ID)
+		return 1
+	}
+
+	if edited.ID != selected.ID {
+		if _, err := sshops.RemoveHost(cfg, selected.ID); err != nil {
+			fmt.Fprintf(os.Stderr, "更新服务器名字失败: %s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+	}
+	if err := sshops.UpsertHost(cfg, edited); err != nil {
+		fmt.Fprintf(os.Stderr, "保存失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+	if err := sshops.SaveConfig(resolvedPath, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "写入配置失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+
+	fmt.Fprintf(os.Stdout, "\n已更新服务器 %q。\n", edited.ID)
+	if testAfterSave {
+		logger := newLogger(false)
+		service, _, _, _, _, err := runtimeServiceForHost(*configPath, logger, edited.ID, runtimeHostOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "加载服务器失败: %s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+		result, err := service.Test(context.Background(), sshops.TestRequest{HostID: edited.ID})
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "连接测试失败: %s\n", sshops.ErrorMessage(err))
+			fmt.Fprintf(os.Stdout, "你可以稍后执行: sshctl test %s\n", edited.ID)
+			return 0
+		}
+		fmt.Fprintf(os.Stdout, "连接成功: %s@%s:%d (%dms)\n", result.User, result.Address, result.Port, result.DurationMS)
+	}
+	return 0
+}
+
+func runRemove(args []string) int {
+	fs := newFlagSet("remove")
+	configPath := fs.String("config", "", "config file path")
+	force := fs.Bool("yes", false, "skip the confirmation prompt")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	resolvedPath := sshops.ResolveConfigPath(*configPath)
+	cfg, err := sshops.LoadConfigFile(resolvedPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "读取配置失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+	if err := cfg.Normalize(); err != nil {
+		fmt.Fprintf(os.Stderr, "配置无效: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	var selected *sshops.HostConfig
+	if fs.NArg() > 0 {
+		selected = findHostByID(cfg.Hosts, strings.TrimSpace(fs.Arg(0)))
+		if selected == nil {
+			fmt.Fprintf(os.Stderr, "找不到服务器 %q。\n", fs.Arg(0))
+			return 1
+		}
+	} else {
+		selected, err = chooseHost(reader, os.Stdout, cfg.Hosts, "请输入要删除的服务器序号、别名或显示名称")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+	}
+
+	if !*force {
+		answer, promptErr := promptOptional(reader, os.Stdout, fmt.Sprintf("确认删除 %s 吗？[y/N]", selected.ID), "N")
+		if promptErr != nil {
+			fmt.Fprintf(os.Stderr, "读取确认失败: %v\n", promptErr)
+			return 1
+		}
+		if !normalizeYesNo(answer, false) {
+			fmt.Fprintln(os.Stdout, "已取消。")
+			return 0
+		}
+	}
+
+	removed, err := sshops.RemoveHost(cfg, selected.ID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "删除失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+	if err := sshops.SaveConfig(resolvedPath, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "写入配置失败: %s\n", sshops.ErrorMessage(err))
+		return 1
+	}
+
+	fmt.Fprintf(os.Stdout, "已删除服务器 %q。\n", removed.ID)
+	return 0
+}
+
 func runShow(args []string) int {
 	fs := newFlagSet("show")
 	configPath := fs.String("config", "", "config file path")
@@ -234,8 +375,25 @@ func runTest(args []string) int {
 		*host = fs.Arg(0)
 	}
 	if strings.TrimSpace(*host) == "" && strings.TrimSpace(*target) == "" && strings.TrimSpace(*address) == "" {
-		fmt.Fprintln(os.Stderr, "用法: sshctl test <host-id> 或 sshctl test --target user@host")
-		return 2
+		if *jsonOutput {
+			return writeEnvelope(envelope{OK: false, Kind: "test", Error: &errorPayload{Code: "invalid_request", Message: "host or target is required"}}, *pretty)
+		}
+		cfg, _, exists, err := loadRuntimeConfig(*configPath, newLogger(*verbose))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取配置失败: %s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+		if !exists || len(cfg.Hosts) == 0 {
+			fmt.Fprintln(os.Stderr, "还没有保存任何服务器。先运行 `sshctl add`。")
+			return 1
+		}
+		reader := bufio.NewReader(os.Stdin)
+		selected, err := chooseHost(reader, os.Stdout, cfg.Hosts, "请输入要测试的服务器序号、别名或显示名称")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+		*host = selected.ID
 	}
 
 	runtimeHost := runtimeHostOptions{
@@ -332,17 +490,41 @@ func runRun(args []string) int {
 		return 2
 	}
 
+	reader := bufio.NewReader(os.Stdin)
 	commandText, hostID := parseRunPositionals(*host, *target, fs.Args())
 	if strings.TrimSpace(hostID) != "" {
 		*host = hostID
 	}
-	if strings.TrimSpace(commandText) == "" {
-		fmt.Fprintln(os.Stderr, "用法: sshctl run <host-id> \"command\" 或 sshctl run --target user@host \"command\"")
-		return 2
-	}
 	if strings.TrimSpace(*host) == "" && strings.TrimSpace(*target) == "" && strings.TrimSpace(*address) == "" {
-		fmt.Fprintln(os.Stderr, "请提供已保存的服务器名，或者使用 --target user@host 直连。")
-		return 2
+		if *jsonOutput {
+			return writeEnvelope(envelope{OK: false, Kind: "exec", Error: &errorPayload{Code: "invalid_request", Message: "host or target is required"}}, *pretty)
+		}
+		cfg, _, exists, err := loadRuntimeConfig(*configPath, newLogger(*verbose))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取配置失败: %s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+		if !exists || len(cfg.Hosts) == 0 {
+			fmt.Fprintln(os.Stderr, "还没有保存任何服务器。先运行 `sshctl add`。")
+			return 1
+		}
+		selected, err := chooseHost(reader, os.Stdout, cfg.Hosts, "请输入要执行命令的服务器序号、别名或显示名称")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+		*host = selected.ID
+	}
+	if strings.TrimSpace(commandText) == "" {
+		if *jsonOutput {
+			return writeEnvelope(envelope{OK: false, Kind: "exec", Error: &errorPayload{Code: "invalid_request", Message: "command is required"}}, *pretty)
+		}
+		value, err := promptRequired(reader, os.Stdout, "要执行的命令", "")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "读取命令失败: %s\n", sshops.ErrorMessage(err))
+			return 1
+		}
+		commandText = value
 	}
 
 	if *jsonOutput {
@@ -465,6 +647,10 @@ func runRun(args []string) int {
 }
 
 type addWizardOptions struct {
+	NoTest bool
+}
+
+type editWizardOptions struct {
 	NoTest bool
 }
 
@@ -611,6 +797,169 @@ func runAddWizard(in io.Reader, out io.Writer, options addWizardOptions) (sshops
 	return host, testAfterSave, nil
 }
 
+func runEditWizard(reader *bufio.Reader, out io.Writer, host sshops.HostConfig, options editWizardOptions) (sshops.HostConfig, bool, error) {
+	fmt.Fprintf(out, "正在编辑 %s。\n\n", host.ID)
+
+	newID, changed, err := promptEditable(reader, out, "服务器名字", host.ID, false)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		host.ID = newID
+	}
+
+	displayName, changed, err := promptEditable(reader, out, "显示名称", host.Name, true)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		host.Name = displayName
+	}
+
+	address, changed, err := promptEditable(reader, out, "服务器地址或 IP", host.Address, false)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		host.Address = address
+	}
+
+	user, changed, err := promptEditable(reader, out, "登录用户", host.User, false)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		host.User = user
+	}
+
+	portText, changed, err := promptEditable(reader, out, "端口", strconv.Itoa(host.Port), false)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		port, convErr := strconv.Atoi(strings.TrimSpace(portText))
+		if convErr != nil || port <= 0 {
+			return sshops.HostConfig{}, false, sshops.NewUserError("invalid_request", "端口必须是正整数", convErr)
+		}
+		host.Port = port
+	}
+
+	currentMethod := "1"
+	if host.Auth.PasswordEnv != "" {
+		currentMethod = "2"
+	}
+	if host.Auth.Password != "" {
+		currentMethod = "3"
+	}
+	authMethod, err := promptChoice(reader, out, "登录方式", []string{
+		"1) 私钥文件",
+		"2) 密码环境变量",
+		"3) 直接保存密码",
+	}, currentMethod)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+
+	switch authMethod {
+	case "1":
+		keyPath, _, promptErr := promptEditable(reader, out, "私钥路径", host.Auth.PrivateKeyPath, false)
+		if promptErr != nil {
+			return sshops.HostConfig{}, false, promptErr
+		}
+		host.Auth.PrivateKeyPath = keyPath
+		host.Auth.Password = ""
+		host.Auth.PasswordEnv = ""
+		host.Auth.PrivateKey = ""
+
+		passphraseEnv, _, promptErr := promptEditable(reader, out, "私钥口令环境变量", host.Auth.PassphraseEnv, true)
+		if promptErr != nil {
+			return sshops.HostConfig{}, false, promptErr
+		}
+		host.Auth.PassphraseEnv = passphraseEnv
+		host.Auth.Passphrase = ""
+	case "2":
+		passwordEnv, _, promptErr := promptEditable(reader, out, "密码环境变量名", host.Auth.PasswordEnv, false)
+		if promptErr != nil {
+			return sshops.HostConfig{}, false, promptErr
+		}
+		host.Auth.PasswordEnv = passwordEnv
+		host.Auth.Password = ""
+		host.Auth.PrivateKey = ""
+		host.Auth.PrivateKeyPath = ""
+		host.Auth.Passphrase = ""
+		host.Auth.PassphraseEnv = ""
+	case "3":
+		passwordValue, _, promptErr := promptEditable(reader, out, "密码", host.Auth.Password, false)
+		if promptErr != nil {
+			return sshops.HostConfig{}, false, promptErr
+		}
+		host.Auth.Password = passwordValue
+		host.Auth.PasswordEnv = ""
+		host.Auth.PrivateKey = ""
+		host.Auth.PrivateKeyPath = ""
+		host.Auth.Passphrase = ""
+		host.Auth.PassphraseEnv = ""
+	default:
+		return sshops.HostConfig{}, false, sshops.NewUserError("invalid_request", "不支持的登录方式", nil)
+	}
+
+	hostKeyModeDefault := "1"
+	if host.HostKey.Mode == "insecure_ignore" {
+		hostKeyModeDefault = "2"
+	}
+	hostKeyMode, err := promptChoice(reader, out, "Host Key 校验方式", []string{
+		"1) known_hosts（推荐）",
+		"2) insecure_ignore（跳过校验）",
+	}, hostKeyModeDefault)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if hostKeyMode == "1" {
+		host.HostKey.Mode = "known_hosts"
+		knownHosts, _, promptErr := promptEditable(reader, out, "known_hosts 路径", host.HostKey.KnownHostsPath, false)
+		if promptErr != nil {
+			return sshops.HostConfig{}, false, promptErr
+		}
+		host.HostKey.KnownHostsPath = knownHosts
+	} else {
+		host.HostKey.Mode = "insecure_ignore"
+		host.HostKey.KnownHostsPath = ""
+	}
+
+	workdir, changed, err := promptEditable(reader, out, "默认工作目录", host.Defaults.Workdir, true)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		host.Defaults.Workdir = workdir
+	}
+
+	shell, changed, err := promptEditable(reader, out, "默认 shell", host.Defaults.Shell, true)
+	if err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	if changed {
+		host.Defaults.Shell = shell
+	}
+
+	validator := sshops.DefaultConfig()
+	validator.Hosts = []sshops.HostConfig{host}
+	if err := validator.Normalize(); err != nil {
+		return sshops.HostConfig{}, false, err
+	}
+	host = validator.Hosts[0]
+
+	testAfterSave := false
+	if !options.NoTest {
+		answer, promptErr := promptOptional(reader, out, "保存后立即测试连接？[Y/n]", "Y")
+		if promptErr != nil {
+			return sshops.HostConfig{}, false, promptErr
+		}
+		testAfterSave = normalizeYesNo(answer, true)
+	}
+	return host, testAfterSave, nil
+}
+
 func promptRequired(reader *bufio.Reader, out io.Writer, label, defaultValue string) (string, error) {
 	for {
 		value, err := promptOptional(reader, out, label, defaultValue)
@@ -646,7 +995,25 @@ func promptChoice(reader *bufio.Reader, out io.Writer, label string, choices []s
 	for _, choice := range choices {
 		fmt.Fprintf(out, "  %s\n", choice)
 	}
-	return promptOptional(reader, out, "请选择", defaultValue)
+	allowed := make(map[string]struct{}, len(choices))
+	for _, choice := range choices {
+		token := strings.TrimSpace(choice)
+		if before, _, found := strings.Cut(token, ")"); found {
+			token = strings.TrimSpace(before)
+		}
+		allowed[token] = struct{}{}
+	}
+	for {
+		value, err := promptOptional(reader, out, "请选择", defaultValue)
+		if err != nil {
+			return "", err
+		}
+		value = strings.TrimSpace(value)
+		if _, ok := allowed[value]; ok {
+			return value, nil
+		}
+		fmt.Fprintln(out, "请输入列表里的序号。")
+	}
 }
 
 func normalizeYesNo(value string, defaultValue bool) bool {

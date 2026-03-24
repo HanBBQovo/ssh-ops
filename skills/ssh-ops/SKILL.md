@@ -12,6 +12,7 @@ description: Execute shell commands on remote hosts over SSH, transfer files ove
 1. 先确认这个任务是真的在管理 `ssh-ops` 配置，或者需要 SSH / SFTP。
 2. 如果用户已经给了 `user@host[:port]` 这类直接目标，优先直接调用 `scripts/ssh_exec.sh` / `scripts/ssh_upload.sh` / `scripts/ssh_download.sh` 并透传 `--target`，不要先要求用户建配置。
 3. 如果用户想保存常用机器，优先使用 `scripts/ssh_host_*.sh`。
+   如果用户只是想知道手动 CLI 怎么用，优先告诉他 `sshctl add`、`sshctl edit`、`sshctl remove`、`sshctl list`、`sshctl test`、`sshctl run` 这一组更短的入口。
 4. 如果不确定主机别名，先运行 `scripts/ssh_host_ls.sh` 或 `scripts/ssh_list_hosts.sh`。
 5. 如果配置可能有问题，先运行 `scripts/ssh_validate_config.sh`。
 6. 根据任务类型只选一个入口：

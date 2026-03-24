@@ -256,8 +256,11 @@ cat <<EOF
 
 下一步：
 1. 确保 ${BIN_DIR} 在 PATH 中；如果没有，请手动加入。
-2. 编辑 ${CONFIG_DIR}/config.yaml
-3. 运行：sshctl validate-config --pretty
-4. 重启 Codex / Claude Code，或开启一个新会话
+2. 先运行：sshctl add
+3. 想修改已有服务器时运行：sshctl edit
+4. 想查看列表时运行：sshctl list
+5. 以后升级时运行：sshctl update
+6. 需要排查底层配置时再看：${CONFIG_DIR}/config.yaml
+7. 重启 Codex / Claude Code，或开启一个新会话
 
 EOF

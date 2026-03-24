@@ -32,8 +32,11 @@ sshctl run prod "df -h"
 - `sshctl add`
 - `sshctl list`
 - `sshctl show [id]`
-- `sshctl test <id>`
-- `sshctl run <id> "command"`
+- `sshctl edit [id]`
+- `sshctl remove [id]`
+- `sshctl test [id]`
+- `sshctl run [id] "command"`
+- `sshctl update`
 
 ### 次级入口
 
@@ -84,6 +87,28 @@ sshctl run --target root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --host
 
 ```bash
 sshctl add
+```
+
+### 修改一台常用机器
+
+如果你不记得别名，直接运行：
+
+```bash
+sshctl edit
+```
+
+它会先列出服务器，再让你按序号、别名或显示名称选择。
+
+### 删除一台不用的机器
+
+```bash
+sshctl remove
+```
+
+如果你已经记得别名，也可以：
+
+```bash
+sshctl remove prod
 ```
 
 ### 看看目前保存了哪些机器
@@ -173,36 +198,28 @@ sshctl show prod
 - 安全地重命名 host id
 - 避免用户手动修改后遗漏引用关系或命名规范
 
-## 过渡期做法
+## 推荐顺序
 
 如果你就是想尽快把一台机器加进去，优先这样做：
 
 ```bash
-sshctl config init --pretty
-
-sshctl config add-host \
-  --id prod \
-  --target deploy@203.0.113.10:22 \
-  --private-key-path ~/.ssh/id_ed25519 \
-  --host-key-mode known_hosts \
-  --pretty
-
-sshctl config set-host --id prod --workdir /srv/app --pretty
-sshctl validate-config --pretty
+sshctl add
+sshctl list
+sshctl test
+sshctl run
 ```
 
-如果你要从模板手动开始，也可以继续：
+如果是已有机器想补字段、改地址、换登录方式，优先这样做：
 
 ```bash
-mkdir -p ~/.config/ssh-ops
-cp ./examples/config.example.yaml ~/.config/ssh-ops/config.yaml
+sshctl edit
 ```
 
-修改完成后，建议立刻执行：
+只有你需要批量改字段、脚本化写配置、或者排查底层配置结构时，才去使用：
 
-```bash
-sshctl validate-config --pretty
-```
+- `sshctl host ...`
+- `sshctl config ...`
+- 手动编辑 YAML
 
 ## 建议做法
 

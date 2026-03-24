@@ -55,10 +55,16 @@
   把你保存过的服务器列出来。
 - `show`
   看某一台服务器的详情。
+- `edit`
+  不记得服务器别名也没关系，直接从列表里选一台再修改。
+- `remove`
+  从列表里选一台服务器删除。
 - `test`
   一键测试能不能连通。
 - `run`
-  在服务器上执行命令。
+  在服务器上执行命令；不记得别名时也可以先选列表，再输入命令。
+- `update`
+  查看或直接执行更新命令。
 
 ### 3. 进阶配置管理
 
@@ -92,7 +98,7 @@
 - `version`
   输出版本信息。
 
-所有命令默认输出 JSON，适合 agent 直接解析。
+底层命令默认输出 JSON，适合 agent 直接解析；`add/edit/remove/list/show/test/run` 这一组更短的人类命令默认输出人类可读文本。
 
 ## 最简单的用法
 
@@ -246,6 +252,37 @@ export SSH_OPS_CLI="$HOME/.local/bin/sshctl"
 
 同样建议确认 `sshctl` 在 `PATH` 上，或者设置 `SSH_OPS_CLI`。
 
+## 更新
+
+如果用户已经安装过 `sshctl`，后续更新直接执行：
+
+```bash
+sshctl update
+```
+
+它会告诉你当前版本、检测到的安装目标，以及对应的一键更新命令。
+
+macOS / Linux 上如果想直接开始更新，可以继续执行：
+
+```bash
+sshctl update --apply
+```
+
+如果你明确只想更新某个目标，也可以显式指定：
+
+```bash
+sshctl update --codex
+sshctl update --claude
+sshctl update --all
+```
+
+需要锁定某个版本时：
+
+```bash
+sshctl update --version v0.1.4
+sshctl update --apply --version v0.1.4
+```
+
 ## 配置
 
 ### 推荐工作流
@@ -303,6 +340,18 @@ sshctl list
 sshctl show prod
 ```
 
+#### 改机器信息
+
+```bash
+sshctl edit
+```
+
+如果你已经记得别名，也可以直接：
+
+```bash
+sshctl edit prod
+```
+
 #### 测试连接
 
 ```bash
@@ -318,13 +367,13 @@ sshctl run prod "df -h"
 #### 删除机器
 
 ```bash
-sshctl host rm prod --pretty
+sshctl remove
 ```
 
-#### 重命名机器
+#### 更新工具
 
 ```bash
-sshctl host rename prod prod-gz --name "广州生产" --pretty
+sshctl update
 ```
 
 ### 配置文件查找顺序
@@ -442,6 +491,7 @@ sshctl add
 ```bash
 sshctl list
 sshctl show prod
+sshctl edit
 ```
 
 #### 3. 测试一下能不能连
@@ -455,6 +505,35 @@ sshctl test prod
 ```bash
 sshctl run prod "uname -a"
 ```
+
+如果你不记得服务器别名，也可以直接：
+
+```bash
+sshctl run
+```
+
+它会先让你从列表里选机器，再问你要执行什么命令。
+
+#### 4.1 测试连接也可以直接选列表
+
+```bash
+sshctl test
+```
+
+如果你只记得“生产环境”这种显示名称，也可以在列表里按显示名称选择。
+
+#### 4.2 修改或删除服务器
+
+```bash
+sshctl edit
+sshctl remove
+```
+
+`edit` 和 `remove` 都支持：
+
+- 直接传别名，例如 `sshctl edit prod`
+- 不传参数后从列表里选
+- 在列表里输入序号、别名或显示名称
 
 #### 5. 一次性直连，不保存
 
@@ -501,6 +580,13 @@ sshctl download \
   --remote /var/log/app.log \
   --local ./tmp/app.log \
   --pretty
+```
+
+#### 9. 更新本地安装
+
+```bash
+sshctl update
+sshctl update --apply
 ```
 
 ### 方式二：在 Codex CLI 里用 skill

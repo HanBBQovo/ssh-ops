@@ -207,16 +207,16 @@ func runHostRename(args []string) int {
 }
 
 func printHostUsage(w io.Writer) {
-	fmt.Fprintln(w, "Manage saved hosts with short, human-friendly commands.")
+	fmt.Fprintln(w, "用更短、更像人话的命令管理已保存的服务器。")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "用法：")
 	fmt.Fprintln(w, "  sshctl host ls")
 	fmt.Fprintln(w, "  sshctl host show [id]")
 	fmt.Fprintln(w, "  sshctl host add <id> <target> [flags]")
 	fmt.Fprintln(w, "  sshctl host rm <id>")
 	fmt.Fprintln(w, "  sshctl host rename <old-id> <new-id> [--name ...]")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, "示例：")
 	fmt.Fprintln(w, "  sshctl host add prod deploy@203.0.113.10 --private-key-path ~/.ssh/id_ed25519 --host-key-mode known_hosts")
 	fmt.Fprintln(w, "  sshctl host add test root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --host-key-mode insecure_ignore")
 	fmt.Fprintln(w, "  sshctl exec --target root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --command 'df -h'")

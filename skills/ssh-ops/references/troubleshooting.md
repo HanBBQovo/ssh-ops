@@ -141,7 +141,13 @@ host_key:
 - 确认环境变量名正确
 - 确认变量已经导出到当前 shell
 
-如果只是想修正一个字段，优先使用 `sshctl config set-host`。
+如果只是想修正一个字段，优先使用：
+
+```bash
+sshctl edit
+```
+
+它会先把机器列出来，再一步一步让你改。
 
 ## 命令被策略拒绝
 
@@ -155,12 +161,12 @@ host_key:
 
 ## 主机别名改错或想删除旧条目
 
-优先使用配置管理命令完成：
+优先直接使用：
 
-- `sshctl config rename-host`
-- `sshctl config remove-host`
+- `sshctl edit`
+- `sshctl remove`
 
-只有在命令不覆盖你的场景时，才考虑手动修改 YAML，并在修改后立刻执行：
+只有在命令不覆盖你的场景时，才考虑 `sshctl config rename-host` / `sshctl config remove-host`，或者手动修改 YAML，并在修改后立刻执行：
 
 ```bash
 sshctl validate-config --pretty

@@ -66,16 +66,22 @@ func run(args []string) int {
 	switch args[0] {
 	case "add":
 		return runAdd(args[1:])
+	case "edit":
+		return runEdit(args[1:])
 	case "config":
 		return runConfig(args[1:])
 	case "host":
 		return runHost(args[1:])
 	case "list":
 		return runList(args[1:])
+	case "remove", "rm":
+		return runRemove(args[1:])
 	case "show":
 		return runShow(args[1:])
 	case "test":
 		return runTest(args[1:])
+	case "update":
+		return runUpdate(args[1:])
 	case "run":
 		return runRun(args[1:])
 	case "list-hosts":
@@ -606,25 +612,28 @@ func newLogger(verbose bool) *log.Logger {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "sshctl replaces the old MCP transport with a local CLI optimized for agent workflows.")
+	fmt.Fprintln(w, "sshctl 是一个面向 Agent CLI 的本地 SSH / SFTP 工具，不再依赖 MCP。")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "用法：")
 	fmt.Fprintln(w, "  sshctl <subcommand> [flags]")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Easy commands:")
-	fmt.Fprintln(w, "  add              Interactive wizard to add a server")
-	fmt.Fprintln(w, "  list             List saved servers")
-	fmt.Fprintln(w, "  show             Show one saved server")
-	fmt.Fprintln(w, "  test             Test whether a saved server or direct target is reachable")
-	fmt.Fprintln(w, "  run              Run a command on a saved server or direct target")
+	fmt.Fprintln(w, "最常用的命令：")
+	fmt.Fprintln(w, "  add              交互式添加一台服务器")
+	fmt.Fprintln(w, "  edit             从列表里选一台服务器进行编辑")
+	fmt.Fprintln(w, "  list             列出已保存的服务器")
+	fmt.Fprintln(w, "  remove           从列表里选一台服务器并删除")
+	fmt.Fprintln(w, "  show             查看某一台服务器")
+	fmt.Fprintln(w, "  test             测试一台服务器能不能连通")
+	fmt.Fprintln(w, "  update           查看或执行更新命令")
+	fmt.Fprintln(w, "  run              在一台服务器上执行命令")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Subcommands:")
-	fmt.Fprintln(w, "  config           Manage the local ssh-ops config file")
-	fmt.Fprintln(w, "  host             Shortcuts for saving and managing common hosts")
-	fmt.Fprintln(w, "  list-hosts       List configured SSH hosts")
-	fmt.Fprintln(w, "  exec             Run a remote shell command")
-	fmt.Fprintln(w, "  upload           Upload a local file or directory over SFTP")
-	fmt.Fprintln(w, "  download         Download a remote file or directory over SFTP")
-	fmt.Fprintln(w, "  validate-config  Check config syntax and runtime readiness")
-	fmt.Fprintln(w, "  version          Print build metadata")
+	fmt.Fprintln(w, "进阶子命令：")
+	fmt.Fprintln(w, "  config           管理本地 ssh-ops 配置文件")
+	fmt.Fprintln(w, "  host             用更短的参数化命令管理常用服务器")
+	fmt.Fprintln(w, "  list-hosts       以 JSON 列出所有服务器")
+	fmt.Fprintln(w, "  exec             执行远端命令")
+	fmt.Fprintln(w, "  upload           通过 SFTP 上传文件或目录")
+	fmt.Fprintln(w, "  download         通过 SFTP 下载文件或目录")
+	fmt.Fprintln(w, "  validate-config  检查配置文件是否可用")
+	fmt.Fprintln(w, "  version          查看版本信息")
 }
