@@ -64,6 +64,8 @@ func run(args []string) int {
 	}
 
 	switch args[0] {
+	case "config":
+		return runConfig(args[1:])
 	case "list-hosts":
 		return runListHosts(args[1:])
 	case "exec":
@@ -460,6 +462,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  sshctl <subcommand> [flags]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
+	fmt.Fprintln(w, "  config           Manage the local ssh-ops config file")
 	fmt.Fprintln(w, "  list-hosts       List configured SSH hosts")
 	fmt.Fprintln(w, "  exec             Run a remote shell command")
 	fmt.Fprintln(w, "  upload           Upload a local file or directory over SFTP")

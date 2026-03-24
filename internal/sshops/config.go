@@ -1,14 +1,11 @@
 package sshops
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 const ConfigEnvVar = "SSH_OPS_CONFIG"
@@ -36,48 +33,43 @@ type PolicyConfig struct {
 
 type HostConfig struct {
 	ID       string        `yaml:"id"`
-	Name     string        `yaml:"name"`
-	Address  string        `yaml:"address"`
-	Port     int           `yaml:"port"`
-	User     string        `yaml:"user"`
-	Auth     AuthConfig    `yaml:"auth"`
-	HostKey  HostKeyConfig `yaml:"host_key"`
-	Defaults HostDefaults  `yaml:"defaults"`
+	Name     string        `yaml:"name,omitempty"`
+	Address  string        `yaml:"address,omitempty"`
+	Port     int           `yaml:"port,omitempty"`
+	User     string        `yaml:"user,omitempty"`
+	Auth     AuthConfig    `yaml:"auth,omitempty"`
+	HostKey  HostKeyConfig `yaml:"host_key,omitempty"`
+	Defaults HostDefaults  `yaml:"defaults,omitempty"`
 }
 
 type AuthConfig struct {
-	Password       string `yaml:"password"`
-	PasswordEnv    string `yaml:"password_env"`
-	PrivateKey     string `yaml:"private_key"`
-	PrivateKeyPath string `yaml:"private_key_path"`
-	Passphrase     string `yaml:"passphrase"`
-	PassphraseEnv  string `yaml:"passphrase_env"`
+	Password       string `yaml:"password,omitempty"`
+	PasswordEnv    string `yaml:"password_env,omitempty"`
+	PrivateKey     string `yaml:"private_key,omitempty"`
+	PrivateKeyPath string `yaml:"private_key_path,omitempty"`
+	Passphrase     string `yaml:"passphrase,omitempty"`
+	PassphraseEnv  string `yaml:"passphrase_env,omitempty"`
 }
 
 type HostKeyConfig struct {
-	Mode           string `yaml:"mode"`
-	KnownHostsPath string `yaml:"known_hosts_path"`
+	Mode           string `yaml:"mode,omitempty"`
+	KnownHostsPath string `yaml:"known_hosts_path,omitempty"`
 }
 
 type HostDefaults struct {
-	Workdir string `yaml:"workdir"`
-	Shell   string `yaml:"shell"`
+	Workdir string `yaml:"workdir,omitempty"`
+	Shell   string `yaml:"shell,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {
-	raw, err := os.ReadFile(path)
+	cfg, err := LoadConfigFile(path)
 	if err != nil {
-		return nil, NewUserError("config_read_failed", "failed to read config file", err)
-	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		return nil, NewUserError("config_parse_failed", "failed to parse config file", err)
+		return nil, err
 	}
 	if err := cfg.Normalize(); err != nil {
 		return nil, err
 	}
-	return &cfg, nil
+	return cfg, nil
 }
 
 func ResolveConfigPath(explicit string) string {
@@ -119,10 +111,6 @@ func (c *Config) Normalize() error {
 	c.Defaults.Shell = normalizeShell(c.Defaults.Shell)
 	if c.Defaults.Shell == "" {
 		c.Defaults.Shell = "bash"
-	}
-
-	if len(c.Hosts) == 0 {
-		return NewUserError("config_invalid", "no hosts configured", errors.New("hosts is empty"))
 	}
 
 	seen := make(map[string]struct{}, len(c.Hosts))

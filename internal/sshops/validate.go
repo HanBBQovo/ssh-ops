@@ -32,6 +32,10 @@ func ValidateConfig(cfg *Config, configPath string) ValidationReport {
 		report.Errors = append(report.Errors, ErrorMessage(err))
 	}
 
+	if len(cfg.Hosts) == 0 {
+		report.Warnings = append(report.Warnings, "no hosts configured yet")
+	}
+
 	for _, host := range cfg.Hosts {
 		validation := HostValidation{
 			ID:   host.ID,

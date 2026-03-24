@@ -23,19 +23,47 @@ go build -o ./bin/sshctl ./cmd/sshctl
 
 ## 找不到配置文件
 
-检查顺序：
+先直接执行：
+
+```bash
+sshctl config path --pretty
+```
+
+如果配置文件还不存在，直接初始化：
+
+```bash
+sshctl config init --pretty
+```
+
+如果你想一步到位把机器加进去，也可以直接执行 `sshctl config add-host ...`，它会自动创建默认配置文件。
+
+再按现有规则排查：
 
 ```bash
 echo "$SSH_OPS_CONFIG"
 ls ~/.config/ssh-ops/config.yaml
 ```
 
-如果没有配置文件，可以从模板复制：
+如果你仍然想从模板开始，也可以复制：
 
 ```bash
 mkdir -p ~/.config/ssh-ops
 cp ./examples/config.example.yaml ~/.config/ssh-ops/config.yaml
 ```
+
+## 不确定当前配置里到底有什么
+
+先直接执行：
+
+```bash
+sshctl config show --pretty
+```
+
+如果还需要继续排查：
+
+- 运行 `sshctl list-hosts --pretty`
+- 直接查看当前配置文件
+- 再执行 `sshctl validate-config --pretty`
 
 ## `validate-config` 失败
 
@@ -100,6 +128,8 @@ host_key:
 - 确认环境变量名正确
 - 确认变量已经导出到当前 shell
 
+如果只是想修正一个字段，优先使用 `sshctl config set-host`。
+
 ## 命令被策略拒绝
 
 如果 `sshctl exec` 返回 `policy_denied`：
@@ -109,3 +139,16 @@ host_key:
 - 不要尝试拼接、变形或绕过策略
 
 通常应该先改成只读检查命令，再让用户确认下一步。
+
+## 主机别名改错或想删除旧条目
+
+优先使用配置管理命令完成：
+
+- `sshctl config rename-host`
+- `sshctl config remove-host`
+
+只有在命令不覆盖你的场景时，才考虑手动修改 YAML，并在修改后立刻执行：
+
+```bash
+sshctl validate-config --pretty
+```

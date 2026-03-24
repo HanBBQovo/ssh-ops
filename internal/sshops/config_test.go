@@ -87,3 +87,20 @@ func TestDefaultConfigPathUsesHomeDir(t *testing.T) {
 		t.Fatalf("defaultConfigPath() = %q, want %q", got, want)
 	}
 }
+
+func TestNormalizeAllowsEmptyHosts(t *testing.T) {
+	cfg := Config{}
+
+	if err := cfg.Normalize(); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+	if cfg.Version != "1" {
+		t.Fatalf("expected version 1, got %q", cfg.Version)
+	}
+	if cfg.Defaults.Shell != "bash" {
+		t.Fatalf("expected default shell bash, got %q", cfg.Defaults.Shell)
+	}
+	if len(cfg.Hosts) != 0 {
+		t.Fatalf("expected no hosts, got %d", len(cfg.Hosts))
+	}
+}

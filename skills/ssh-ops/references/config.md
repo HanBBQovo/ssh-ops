@@ -1,5 +1,28 @@
 # 配置说明
 
+## 先看推荐工作流
+
+对大多数用户来说，推荐工作流不是手改 YAML，而是通过 `sshctl config ...` 管理配置和主机条目。
+
+当前已经可用的入口：
+
+- `sshctl config path`
+  查看当前生效的配置路径。
+- `sshctl config init`
+  初始化配置文件。
+- `sshctl config show`
+  查看当前配置内容；默认脱敏输出内联秘密值。
+- `sshctl config add-host`
+  新增主机；若配置文件不存在会自动创建。
+- `sshctl config set-host`
+  创建或更新主机字段。
+- `sshctl config remove-host`
+  删除主机。
+- `sshctl config rename-host`
+  重命名主机 id 或显示名。
+
+底层仍然使用 YAML 文件持久化配置，但日常增删改查不需要手改 YAML。
+
 ## 配置文件查找顺序
 
 `sshctl` 会按下面顺序查找配置文件：
@@ -7,6 +30,117 @@
 1. `--config /path/to/config.yaml`
 2. 环境变量 `SSH_OPS_CONFIG`
 3. `~/.config/ssh-ops/config.yaml`
+
+## 管理命令框架
+
+### `sshctl config init`
+
+目标：
+
+- 初始化默认配置文件
+- 创建配置目录
+- 写入最小可用骨架
+
+应解决的问题：
+
+- 新用户第一次使用时不需要手动复制模板
+- 用户能快速知道配置会写到哪里
+
+### `sshctl config path`
+
+目标：
+
+- 直接输出当前生效的配置路径
+- 帮助定位“到底用了哪个配置文件”
+
+适用场景：
+
+- 排查多个环境变量或多个配置文件冲突
+- 调试 CI、本地 shell 或 agent 运行时的配置来源
+
+### `sshctl config show`
+
+目标：
+
+- 查看当前配置
+- 查看某个 host 条目
+- 查看主机列表或有效配置快照
+- 默认对 `password`、`private_key`、`passphrase` 做脱敏
+
+适用场景：
+
+- 确认 `prod` 指向哪台机器
+- 排查 host key、user、默认工作目录是否写对
+
+### `sshctl config add-host`
+
+目标：
+
+- 通过参数化方式新增一个主机条目
+- 避免用户手工维护 YAML 缩进和字段结构
+- 支持 `--target deploy@203.0.113.10:22` 这种快捷写法
+
+建议用途：
+
+- 首次录入 `prod`、`staging`、`test` 等环境
+- 在 skill 或脚本化流程中追加主机配置
+
+### `sshctl config set-host`
+
+目标：
+
+- 创建或更新某个 host
+- 适合补一个字段，例如 `workdir`、`name`、`known_hosts_path`
+
+当前边界：
+
+- 适合“补充/覆盖字段”
+- 暂不提供显式清空单个字段的专门参数；需要时可删除并重建，或手工编辑 YAML
+
+### `sshctl config remove-host`
+
+目标：
+
+- 删除一个不再使用的 host 条目
+- 避免 YAML 残留条目导致误用
+
+### `sshctl config rename-host`
+
+目标：
+
+- 安全地重命名 host id
+- 避免用户手动修改后遗漏引用关系或命名规范
+
+## 过渡期做法
+
+如果你就是想尽快把一台机器加进去，优先这样做：
+
+```bash
+sshctl config init --pretty
+
+sshctl config add-host \
+  --id prod \
+  --target deploy@203.0.113.10:22 \
+  --private-key-path ~/.ssh/id_ed25519 \
+  --host-key-mode known_hosts \
+  --pretty
+
+sshctl config set-host --id prod --workdir /srv/app --pretty
+sshctl validate-config --pretty
+```
+
+如果你要从模板手动开始，也可以继续：
+
+```bash
+mkdir -p ~/.config/ssh-ops
+cp ./examples/config.example.yaml ~/.config/ssh-ops/config.yaml
+```
+
+修改完成后，建议立刻执行：
+
+```bash
+sshctl validate-config --pretty
+```
 
 ## 建议做法
 
@@ -16,7 +150,15 @@
 - 生产环境尽量使用 `known_hosts`
 - 修改配置后先运行 `sshctl validate-config --pretty`
 
-## 最小配置示例
+## YAML 结构参考
+
+YAML 仍然是底层格式，因此保留字段说明，供以下场景使用：
+
+- 调试配置加载问题
+- 手工修复异常条目
+- 与未来 `sshctl config show` / `update` 的行为做比对
+
+### 最小配置示例
 
 ```yaml
 version: "1"
@@ -46,8 +188,6 @@ hosts:
     defaults:
       workdir: "/srv/app"
 ```
-
-## 字段说明
 
 ### 顶层字段
 
@@ -131,13 +271,3 @@ hosts:
 - `aliyun-gz`
 
 不建议把中文、空格或说明性长句直接放进 `id`。
-
-## 修改配置后的标准动作
-
-每次编辑配置后，建议立刻执行：
-
-```bash
-sshctl validate-config --pretty
-```
-
-如果失败，再根据报错修正路径、认证方式或 host key 配置。

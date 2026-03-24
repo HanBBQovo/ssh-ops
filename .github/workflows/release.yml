@@ -142,6 +142,26 @@ jobs:
           find release-assets -type f -maxdepth 2 -exec cp {} publish/ \;
           ls -la publish
 
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd publish
+          shopt -s nullglob
+          files=(*)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "no release assets found" >&2
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}" | sort | while IFS= read -r file; do
+            sha256sum "$file"
+          done > SHA256SUMS.txt
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-checksums
+          path: publish/SHA256SUMS.txt
+
       - name: Resolve version
         id: version
         shell: bash
@@ -152,12 +172,63 @@ jobs:
             echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          {
+            echo "## Overview"
+            echo
+            echo "- Prebuilt \`sshctl\` archives for macOS, Linux, and Windows"
+            echo "- Manual skill bundles: \`ssh-ops-skill.tar.gz\` and \`ssh-ops-skill.zip\`"
+            echo "- \`SHA256SUMS.txt\` for verifying every published asset"
+            echo
+            echo "## Install"
+            echo
+            echo "### Codex"
+            echo
+            echo "\`\`\`bash"
+            echo "curl -fsSL https://raw.githubusercontent.com/HanBBQovo/ssh-ops/main/install/install.sh | bash -s -- --codex"
+            echo "\`\`\`"
+            echo
+            echo "### Claude Code"
+            echo
+            echo "\`\`\`bash"
+            echo "curl -fsSL https://raw.githubusercontent.com/HanBBQovo/ssh-ops/main/install/install.sh | bash -s -- --claude"
+            echo "\`\`\`"
+            echo
+            echo "## Verify Downloads"
+            echo
+            echo "Linux:"
+            echo
+            echo "\`\`\`bash"
+            echo "sha256sum -c SHA256SUMS.txt"
+            echo "\`\`\`"
+            echo
+            echo "macOS:"
+            echo
+            echo "\`\`\`bash"
+            echo "shasum -a 256 -c SHA256SUMS.txt"
+            echo "\`\`\`"
+            echo
+            echo "## Release Assets"
+            echo
+            printf '%s\n' publish/* | sed 's#^publish/##' | sort | while IFS= read -r asset; do
+              echo "- \`$asset\`"
+            done
+            echo
+            echo "## Metadata"
+            echo
+            echo "- Tag: \`${{ steps.version.outputs.value }}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Workflow: \`${GITHUB_WORKFLOW}\`"
+          } > release-notes.md
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.value }}
           name: ${{ steps.version.outputs.value }}
           files: publish/*
+          body_path: release-notes.md
           draft: false
           prerelease: false
-

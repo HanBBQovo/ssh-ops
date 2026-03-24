@@ -1,4 +1,4 @@
 interface:
   display_name: "SSH Ops"
-  short_description: "Remote SSH exec and SFTP transfers"
-  default_prompt: "Use $ssh-ops to inspect configured hosts, run a safe remote command, or transfer files over SSH."
+  short_description: "SSH 配置管理、远程执行与文件传输"
+  default_prompt: "Use $ssh-ops to manage ssh-ops host config, inspect configured hosts, run a safe remote command, or transfer files over SSH."

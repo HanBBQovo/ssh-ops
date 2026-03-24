@@ -1,5 +1,9 @@
 # ssh-ops
 
+[![CI](https://github.com/HanBBQovo/ssh-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/HanBBQovo/ssh-ops/actions/workflows/ci.yml)
+[![Release](https://github.com/HanBBQovo/ssh-ops/actions/workflows/release.yml/badge.svg)](https://github.com/HanBBQovo/ssh-ops/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 `ssh-ops` 是一个面向 Agent CLI 的开源远程运维工具集，采用 `Skill + 本地 CLI` 的形态，而不是 MCP Server。
 
 它的目标很明确：
@@ -38,7 +42,26 @@
 
 ## 核心能力
 
-`sshctl` 当前提供这些子命令：
+`sshctl` 当前稳定提供两组能力：
+
+### 1. 配置管理
+
+- `config path`
+  查看当前生效的配置路径，以及配置文件是否存在。
+- `config init`
+  初始化默认配置文件。
+- `config show`
+  以 JSON 查看当前配置；默认会对内联密码、私钥、口令做脱敏。
+- `config add-host`
+  新增一个主机条目；如果配置文件还不存在，会自动创建。
+- `config set-host`
+  创建或更新一个主机条目，适合补字段，例如补 `workdir`。
+- `config remove-host`
+  按 host id 删除条目。
+- `config rename-host`
+  重命名 host id 或显示名称。
+
+### 2. 远端操作
 
 - `list-hosts`
   列出当前配置中的主机别名。
@@ -54,6 +77,24 @@
   输出版本信息。
 
 所有命令默认输出 JSON，适合 agent 直接解析。
+
+## 配置不用手改
+
+底层仍然是 YAML，但日常使用推荐优先走 `sshctl config ...`，而不是直接打开配置文件手工编辑。
+
+最常见的工作流是：
+
+1. `sshctl config init --pretty`
+2. `sshctl config add-host --id prod --target deploy@203.0.113.10:22 --private-key-path ~/.ssh/id_ed25519 --host-key-mode known_hosts --pretty`
+3. `sshctl config set-host --id prod --workdir /srv/app --pretty`
+4. `sshctl validate-config --pretty`
+5. `sshctl list-hosts --pretty`
+
+其中 `--target` 是一个快捷写法，支持这种形式：
+
+- `deploy@203.0.113.10`
+- `deploy@203.0.113.10:22`
+- `203.0.113.10:22`
 
 ## 安装
 
@@ -164,13 +205,83 @@ export SSH_OPS_CLI="$HOME/.local/bin/sshctl"
 
 ## 配置
 
+### 推荐工作流
+
+推荐工作流是通过 `sshctl config ...` 管理配置和主机条目，而不是要求用户长期手动维护 YAML。
+
+如果你只是想“把我的机器加进去”，按这组命令走就够了：
+
+```bash
+sshctl config init --pretty
+
+sshctl config add-host \
+  --id prod \
+  --target deploy@203.0.113.10:22 \
+  --private-key-path ~/.ssh/id_ed25519 \
+  --host-key-mode known_hosts \
+  --pretty
+
+sshctl config set-host \
+  --id prod \
+  --name "生产环境" \
+  --workdir /srv/app \
+  --pretty
+
+sshctl validate-config --pretty
+sshctl list-hosts --pretty
+```
+
+如果你用密码而不是私钥，可以把 `--private-key-path` 换成：
+
+```bash
+--password-env SSH_OPS_PROD_PASSWORD
+```
+
+如果你还没有配置文件，也可以直接执行 `add-host`。它会自动创建默认配置文件。
+
+### 配置文件查找顺序
+
 `sshctl` 会按下面顺序寻找配置文件：
 
 1. `--config /path/to/config.yaml`
 2. 环境变量 `SSH_OPS_CONFIG`
 3. `~/.config/ssh-ops/config.yaml`
 
-你可以直接从模板开始：
+### 常用配置命令
+
+#### 看路径
+
+```bash
+sshctl config path --pretty
+```
+
+#### 看当前配置
+
+```bash
+sshctl config show --pretty
+```
+
+如果你确实要检查内联秘密值，可以显式加：
+
+```bash
+sshctl config show --reveal-secrets --pretty
+```
+
+#### 删除主机
+
+```bash
+sshctl config remove-host --host prod --pretty
+```
+
+#### 重命名主机
+
+```bash
+sshctl config rename-host --host prod --new-id prod-gz --name "广州生产" --pretty
+```
+
+### 仍然可以手动编辑 YAML
+
+如果你在调试底层配置，或者要做批量调整，仍然可以从模板开始：
 
 ```bash
 mkdir -p ~/.config/ssh-ops
@@ -184,7 +295,9 @@ cp ./examples/config.example.yaml ~/.config/ssh-ops/config.yaml
 - 正式环境尽量使用 `known_hosts`
 - 不要把真实配置文件提交到仓库
 
-### 最小配置示例
+### YAML 结构参考
+
+下面的示例仍然有效，但应把它理解为底层格式参考，而不是首选的日常管理方式：
 
 ```yaml
 version: "1"
@@ -228,21 +341,46 @@ hosts:
 
 这是最直接、也最容易调试的方式。
 
-#### 1. 查看主机别名
+#### 1. 初始化或查看配置
+
+```bash
+sshctl config path --pretty
+sshctl config init --pretty
+sshctl config show --pretty
+```
+
+#### 2. 添加一台机器
+
+```bash
+sshctl config add-host \
+  --id prod \
+  --target deploy@203.0.113.10:22 \
+  --private-key-path ~/.ssh/id_ed25519 \
+  --host-key-mode known_hosts \
+  --pretty
+```
+
+如果后面只想补一个字段，例如默认目录：
+
+```bash
+sshctl config set-host --id prod --workdir /srv/app --pretty
+```
+
+#### 3. 查看主机别名
 
 ```bash
 sshctl list-hosts --pretty
 ```
 
-#### 2. 校验配置
+#### 4. 校验配置
 
-第一次使用前建议先跑：
+第一次使用前建议先跑，改完配置后也建议再跑一次：
 
 ```bash
 sshctl validate-config --pretty
 ```
 
-#### 3. 远程执行命令
+#### 5. 远程执行命令
 
 ```bash
 sshctl exec --host prod --command "uname -a" --pretty
@@ -259,7 +397,7 @@ sshctl exec \
   --pretty
 ```
 
-#### 4. 上传文件
+#### 6. 上传文件
 
 ```bash
 sshctl upload \
@@ -269,7 +407,7 @@ sshctl upload \
   --pretty
 ```
 
-#### 5. 下载文件
+#### 7. 下载文件
 
 ```bash
 sshctl download \
@@ -351,6 +489,18 @@ Claude Code 也是一样，优先自然语言触发：
 
 注意：`SKILL.md` 的 frontmatter 描述保留英文，是为了尽量保证跨运行时的 skill 触发质量；正文和仓库文档已经改成中文。
 
+## 发布与开源
+
+这个仓库以 MIT License 开源。
+
+每次发布会在 GitHub Releases 中提供：
+
+- macOS / Linux / Windows 的预编译 `sshctl` 压缩包
+- `ssh-ops-skill.tar.gz` 与 `ssh-ops-skill.zip`
+- 发布产物校验和文件，便于校验下载完整性
+
+源码、安装脚本和 skill 目录都在仓库内，可以直接审查。
+
 ## 安全设计
 
 项目默认是偏保守的：
@@ -392,11 +542,31 @@ make validate-skill
 
 ### 2. 配置文件找不到
 
-先检查：
+先直接执行：
+
+```bash
+sshctl config path --pretty
+```
+
+如果配置文件还不存在，初始化它：
+
+```bash
+sshctl config init --pretty
+```
+
+如果你只是想先把一台机器加进去，也可以直接跑 `add-host`，它会顺手创建默认配置。
+
+再检查：
 
 ```bash
 echo "$SSH_OPS_CONFIG"
 ls ~/.config/ssh-ops/config.yaml
+```
+
+如果你不确定当前到底写了什么，继续执行：
+
+```bash
+sshctl config show --pretty
 ```
 
 ### 3. 校验失败
