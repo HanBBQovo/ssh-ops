@@ -78,6 +78,50 @@ func TestRunConfigInitAndAddHost(t *testing.T) {
 	}
 }
 
+func TestRunHostAddWithPositionalTarget(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+
+	exitCode, output := captureStdout(t, func() int {
+		return run([]string{
+			"host", "add",
+			"--config", configPath,
+			"--private-key-path", "~/.ssh/id_ed25519",
+			"--host-key-mode", "insecure_ignore",
+			"prod", "deploy@203.0.113.10:22",
+		})
+	})
+	if exitCode != 0 {
+		t.Fatalf("host add exit code = %d, output = %s", exitCode, output)
+	}
+
+	cfg, err := sshops.LoadConfigFile(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfigFile() error = %v", err)
+	}
+	if len(cfg.Hosts) != 1 {
+		t.Fatalf("expected one host, got %d", len(cfg.Hosts))
+	}
+	if cfg.Hosts[0].User != "deploy" || cfg.Hosts[0].Address != "203.0.113.10" {
+		t.Fatalf("unexpected host payload: %#v", cfg.Hosts[0])
+	}
+}
+
+func TestRunExecWithAdhocTargetAndDryRun(t *testing.T) {
+	exitCode, output := captureStdout(t, func() int {
+		return run([]string{
+			"exec",
+			"--target", "root@192.168.1.9:22",
+			"--password", "secret",
+			"--host-key-mode", "insecure_ignore",
+			"--command", "df -h",
+			"--dry-run",
+		})
+	})
+	if exitCode != 0 {
+		t.Fatalf("exec dry-run exit code = %d, output = %s", exitCode, output)
+	}
+}
+
 func captureStdout(t *testing.T, fn func() int) (int, string) {
 	t.Helper()
 

@@ -1,6 +1,6 @@
 ---
 name: ssh-ops
-description: Manage local ssh-ops host configuration, execute shell commands on remote hosts over SSH, and transfer files over SFTP through a local `sshctl` CLI. Use when the task requires adding or inspecting SSH host aliases, remote deployment checks, log inspection, or file transfer via SSH/SFTP. Do not use for local shell tasks, cloud-provider APIs, or interactive terminal sessions.
+description: Execute shell commands on remote hosts over SSH, transfer files over SFTP, and manage saved host aliases through a local `sshctl` CLI. Use when the task requires one-off SSH access via a direct target like user@host, adding a reusable host alias, remote deployment checks, log inspection, or file transfer via SSH/SFTP. Do not use for local shell tasks, cloud-provider APIs, or interactive terminal sessions.
 ---
 
 # SSH Ops
@@ -10,10 +10,16 @@ description: Manage local ssh-ops host configuration, execute shell commands on 
 ## 默认工作流
 
 1. 先确认这个任务是真的在管理 `ssh-ops` 配置，或者需要 SSH / SFTP。
-2. 如果任务是“找配置、初始化配置、添加机器、改名、删除主机”，优先使用 `scripts/ssh_config_*.sh`。
-3. 如果不确定主机别名，先运行 `scripts/ssh_list_hosts.sh`。
-4. 如果配置可能有问题，先运行 `scripts/ssh_validate_config.sh`。
-5. 根据任务类型只选一个入口：
+2. 如果用户已经给了 `user@host[:port]` 这类直接目标，优先直接调用 `scripts/ssh_exec.sh` / `scripts/ssh_upload.sh` / `scripts/ssh_download.sh` 并透传 `--target`，不要先要求用户建配置。
+3. 如果用户想保存常用机器，优先使用 `scripts/ssh_host_*.sh`。
+4. 如果不确定主机别名，先运行 `scripts/ssh_host_ls.sh` 或 `scripts/ssh_list_hosts.sh`。
+5. 如果配置可能有问题，先运行 `scripts/ssh_validate_config.sh`。
+6. 根据任务类型只选一个入口：
+   - `scripts/ssh_host_ls.sh`：列出已保存主机
+   - `scripts/ssh_host_show.sh`：查看保存的主机
+   - `scripts/ssh_host_add.sh`：用最短命令新增主机
+   - `scripts/ssh_host_rm.sh`：删除主机
+   - `scripts/ssh_host_rename.sh`：重命名主机
    - `scripts/ssh_config_path.sh`：查看配置路径
    - `scripts/ssh_config_init.sh`：初始化默认配置
    - `scripts/ssh_config_show.sh`：查看当前配置
@@ -42,6 +48,11 @@ description: Manage local ssh-ops host configuration, execute shell commands on 
 ## 可用脚本
 
 - `scripts/ssh_list_hosts.sh`：列出已配置主机
+- `scripts/ssh_host_ls.sh`：列出已保存主机
+- `scripts/ssh_host_show.sh`：查看已保存主机
+- `scripts/ssh_host_add.sh`：用更短命令新增主机
+- `scripts/ssh_host_rm.sh`：删除主机
+- `scripts/ssh_host_rename.sh`：重命名主机
 - `scripts/ssh_validate_config.sh`：校验配置是否可用
 - `scripts/ssh_config_path.sh`：查看配置路径
 - `scripts/ssh_config_init.sh`：初始化默认配置

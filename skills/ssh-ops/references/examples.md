@@ -4,6 +4,27 @@
 
 这些示例对应当前已经稳定存在的脚本和命令。
 
+## 最短路径：直接连一台机器
+
+```bash
+scripts/ssh_exec.sh \
+  --target root@192.168.1.9 \
+  --password-env SSH_OPS_TEST_PASSWORD \
+  --host-key-mode insecure_ignore \
+  --command "df -h" \
+  --pretty
+```
+
+## 把这台机器保存成别名
+
+```bash
+sshctl host add prod deploy@203.0.113.10 \
+  --private-key-path ~/.ssh/id_ed25519 \
+  --host-key-mode known_hosts \
+  --workdir /srv/app \
+  --pretty
+```
+
 ## 先看有哪些主机
 
 ```bash
@@ -54,7 +75,7 @@ scripts/ssh_upload.sh \
 
 ## 配置管理示例
 
-下面这些命令已经可用，优先通过它们管理配置，而不是让用户手改 YAML。
+下面这些命令已经可用，但它们更偏“进阶配置管理”。新手优先用上面的 `--target` 和 `sshctl host add`。
 
 ## 查看当前配置路径
 

@@ -44,7 +44,29 @@
 
 `sshctl` 当前稳定提供两组能力：
 
-### 1. 配置管理
+### 1. 零配置直连
+
+- `exec --target ...`
+  直接对 `user@ip[:port]` 执行命令，不必先建配置文件。
+- `upload --target ...`
+  直接上传文件到一台尚未保存的机器。
+- `download --target ...`
+  直接从一台尚未保存的机器下载文件。
+
+### 2. 常用机器管理
+
+- `host add <id> <target>`
+  用最短命令保存一台常用机器。
+- `host ls`
+  列出已保存的机器。
+- `host show [id]`
+  看全部机器或某一台机器。
+- `host rm <id>`
+  删除一个已保存的机器。
+- `host rename <old> <new>`
+  重命名一个已保存的机器。
+
+### 3. 进阶配置管理
 
 - `config path`
   查看当前生效的配置路径，以及配置文件是否存在。
@@ -61,7 +83,7 @@
 - `config rename-host`
   重命名 host id 或显示名称。
 
-### 2. 远端操作
+### 4. 远端操作
 
 - `list-hosts`
   列出当前配置中的主机别名。
@@ -78,19 +100,42 @@
 
 所有命令默认输出 JSON，适合 agent 直接解析。
 
-## 配置不用手改
+## 最简单的用法
 
-底层仍然是 YAML，但日常使用推荐优先走 `sshctl config ...`，而不是直接打开配置文件手工编辑。
+先别想配置文件。这个工具现在应该先这样用：
 
-最常见的工作流是：
+### 1. 临时连一台机器，不保存
 
-1. `sshctl config init --pretty`
-2. `sshctl config add-host --id prod --target deploy@203.0.113.10:22 --private-key-path ~/.ssh/id_ed25519 --host-key-mode known_hosts --pretty`
-3. `sshctl config set-host --id prod --workdir /srv/app --pretty`
-4. `sshctl validate-config --pretty`
-5. `sshctl list-hosts --pretty`
+```bash
+sshctl exec \
+  --target root@192.168.1.9:22 \
+  --password-env SSH_OPS_TEST_PASSWORD \
+  --host-key-mode insecure_ignore \
+  --command "df -h" \
+  --pretty
+```
 
-其中 `--target` 是一个快捷写法，支持这种形式：
+### 2. 把这台机器保存成别名，以后反复用
+
+```bash
+sshctl host add prod deploy@203.0.113.10 \
+  --private-key-path ~/.ssh/id_ed25519 \
+  --host-key-mode known_hosts \
+  --workdir /srv/app \
+  --name "生产环境" \
+  --pretty
+```
+
+以后就直接：
+
+```bash
+sshctl exec --host prod --command "df -h" --pretty
+sshctl upload --host prod --local ./dist/app.tar.gz --remote /tmp/app.tar.gz --pretty
+```
+
+只有你需要批量调整、看底层细节、或者排障时，才需要去看 `sshctl config ...`。
+
+其中 `target` 支持这种形式：
 
 - `deploy@203.0.113.10`
 - `deploy@203.0.113.10:22`
@@ -207,24 +252,20 @@ export SSH_OPS_CLI="$HOME/.local/bin/sshctl"
 
 ### 推荐工作流
 
-推荐工作流是通过 `sshctl config ...` 管理配置和主机条目，而不是要求用户长期手动维护 YAML。
+推荐顺序现在改成这样：
 
-如果你只是想“把我的机器加进去”，按这组命令走就够了：
+1. 一次性任务：直接 `--target`
+2. 常用机器：`sshctl host add`
+3. 只有进阶场景再用 `sshctl config ...`
+
+如果你只是想“把我的机器加进去”，最短路径不是 `config add-host`，而是：
 
 ```bash
-sshctl config init --pretty
-
-sshctl config add-host \
-  --id prod \
-  --target deploy@203.0.113.10:22 \
+sshctl host add prod deploy@203.0.113.10:22 \
   --private-key-path ~/.ssh/id_ed25519 \
   --host-key-mode known_hosts \
-  --pretty
-
-sshctl config set-host \
-  --id prod \
-  --name "生产环境" \
   --workdir /srv/app \
+  --name "生产环境" \
   --pretty
 
 sshctl validate-config --pretty
@@ -237,7 +278,50 @@ sshctl list-hosts --pretty
 --password-env SSH_OPS_PROD_PASSWORD
 ```
 
-如果你还没有配置文件，也可以直接执行 `add-host`。它会自动创建默认配置文件。
+如果你根本不想先保存主机，直接：
+
+```bash
+sshctl exec \
+  --target root@192.168.1.9 \
+  --password-env SSH_OPS_TEST_PASSWORD \
+  --host-key-mode insecure_ignore \
+  --command "uname -a" \
+  --pretty
+```
+
+如果你还没有配置文件，也没关系，`host add` / `config add-host` 都会自动创建默认配置文件。
+
+### 更短的主机管理命令
+
+#### 新增常用机器
+
+```bash
+sshctl host add prod deploy@203.0.113.10 --private-key-path ~/.ssh/id_ed25519 --host-key-mode known_hosts --pretty
+```
+
+#### 看所有机器
+
+```bash
+sshctl host ls --pretty
+```
+
+#### 看某一台机器
+
+```bash
+sshctl host show prod --pretty
+```
+
+#### 删除机器
+
+```bash
+sshctl host rm prod --pretty
+```
+
+#### 重命名机器
+
+```bash
+sshctl host rename prod prod-gz --name "广州生产" --pretty
+```
 
 ### 配置文件查找顺序
 
@@ -248,6 +332,8 @@ sshctl list-hosts --pretty
 3. `~/.config/ssh-ops/config.yaml`
 
 ### 常用配置命令
+
+下面这些更偏“进阶”和“排障”，不是新手第一入口。
 
 #### 看路径
 
@@ -341,40 +427,37 @@ hosts:
 
 这是最直接、也最容易调试的方式。
 
-#### 1. 初始化或查看配置
+#### 1. 最短路径：不配置，直接连
 
 ```bash
-sshctl config path --pretty
-sshctl config init --pretty
-sshctl config show --pretty
-```
-
-#### 2. 添加一台机器
-
-```bash
-sshctl config add-host \
-  --id prod \
-  --target deploy@203.0.113.10:22 \
-  --private-key-path ~/.ssh/id_ed25519 \
-  --host-key-mode known_hosts \
+sshctl exec \
+  --target root@192.168.1.9 \
+  --password-env SSH_OPS_TEST_PASSWORD \
+  --host-key-mode insecure_ignore \
+  --command "df -h" \
   --pretty
 ```
 
-如果后面只想补一个字段，例如默认目录：
+#### 2. 如果要长期使用，再保存成别名
 
 ```bash
-sshctl config set-host --id prod --workdir /srv/app --pretty
+sshctl host add prod deploy@203.0.113.10:22 \
+  --private-key-path ~/.ssh/id_ed25519 \
+  --host-key-mode known_hosts \
+  --workdir /srv/app \
+  --pretty
 ```
 
 #### 3. 查看主机别名
 
 ```bash
+sshctl host ls --pretty
 sshctl list-hosts --pretty
 ```
 
 #### 4. 校验配置
 
-第一次使用前建议先跑，改完配置后也建议再跑一次：
+改完配置后建议跑一次：
 
 ```bash
 sshctl validate-config --pretty

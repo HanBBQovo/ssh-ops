@@ -66,6 +66,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "config":
 		return runConfig(args[1:])
+	case "host":
+		return runHost(args[1:])
 	case "list-hosts":
 		return runListHosts(args[1:])
 	case "exec":
@@ -99,7 +101,15 @@ func runListHosts(args []string) int {
 
 	logger := newLogger(*verbose)
 	startedAt := time.Now()
-	service, resolvedPath, err := sshops.LoadService(*configPath, logger)
+	cfg, resolvedPath, exists, err := loadRuntimeConfig(*configPath, logger)
+	if err != nil {
+		return writeEnvelope(envelope{
+			OK:    false,
+			Kind:  "list-hosts",
+			Error: buildError(err, map[string]interface{}{"config_path": resolvedPath}),
+		}, *pretty)
+	}
+	service, err := sshops.NewService(cfg, logger)
 	if err != nil {
 		return writeEnvelope(envelope{
 			OK:    false,
@@ -113,6 +123,7 @@ func runListHosts(args []string) int {
 		Kind: "list-hosts",
 		Result: map[string]interface{}{
 			"config_path": resolvedPath,
+			"exists":      exists,
 			"hosts":       service.ListHosts(),
 		},
 		Meta: &metaPayload{DurationMS: time.Since(startedAt).Milliseconds()},
@@ -128,8 +139,15 @@ func runValidateConfig(args []string) int {
 	}
 
 	resolvedPath := sshops.ResolveConfigPath(*configPath)
-	cfg, err := sshops.LoadConfig(resolvedPath)
+	cfg, exists, err := sshops.LoadConfigFileOrDefault(resolvedPath)
 	if err != nil {
+		return writeEnvelope(envelope{
+			OK:    false,
+			Kind:  "validate-config",
+			Error: buildError(err, map[string]interface{}{"config_path": resolvedPath}),
+		}, *pretty)
+	}
+	if err := cfg.Normalize(); err != nil {
 		return writeEnvelope(envelope{
 			OK:    false,
 			Kind:  "validate-config",
@@ -138,6 +156,9 @@ func runValidateConfig(args []string) int {
 	}
 
 	report := sshops.ValidateConfig(cfg, resolvedPath)
+	if !exists {
+		report.Warnings = append([]string{"config file does not exist yet; showing defaults"}, report.Warnings...)
+	}
 	env := envelope{
 		OK:     report.OK,
 		Kind:   "validate-config",
@@ -162,6 +183,19 @@ func runExec(args []string) int {
 	shell := fs.String("shell", "", "remote shell to use (bash or sh)")
 	maxOutputBytes := fs.Int64("max-output-bytes", 0, "stdout/stderr capture limit")
 	readStdin := fs.Bool("stdin", false, "pipe local stdin to the remote process")
+	target := fs.String("target", "", "ad-hoc target like user@example.com:22")
+	user := fs.String("user", "", "SSH username for ad-hoc target mode")
+	address := fs.String("address", "", "host or IP for ad-hoc target mode")
+	port := fs.Int("port", 0, "port for ad-hoc target mode")
+	password := fs.String("password", "", "inline password for ad-hoc target mode")
+	passwordEnv := fs.String("password-env", "", "environment variable with password for ad-hoc target mode")
+	privateKeyPath := fs.String("private-key-path", "", "private key path for ad-hoc target mode")
+	passphrase := fs.String("passphrase", "", "inline private key passphrase")
+	passphraseEnv := fs.String("passphrase-env", "", "environment variable with private key passphrase")
+	hostKeyMode := fs.String("host-key-mode", "", "known_hosts or insecure_ignore for ad-hoc target mode")
+	knownHostsPath := fs.String("known-hosts-path", "", "known_hosts path for ad-hoc target mode")
+	saveHost := fs.String("save-host", "", "save the ad-hoc target as a reusable host id after success")
+	saveName := fs.String("save-name", "", "optional display name used with --save-host")
 	dryRun := fs.Bool("dry-run", false, "print the resolved action without executing")
 	pretty := fs.Bool("pretty", false, "pretty-print JSON")
 	verbose := fs.Bool("verbose", false, "write debug logs to stderr")
@@ -170,8 +204,8 @@ func runExec(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if strings.TrimSpace(*host) == "" {
-		return writeEnvelope(envelope{OK: false, Kind: "exec", Error: &errorPayload{Code: "invalid_request", Message: "host is required"}}, *pretty)
+	if strings.TrimSpace(*host) == "" && strings.TrimSpace(*target) == "" && strings.TrimSpace(*address) == "" {
+		return writeEnvelope(envelope{OK: false, Kind: "exec", Error: &errorPayload{Code: "invalid_request", Message: "host or target is required"}}, *pretty)
 	}
 	if strings.TrimSpace(*command) == "" {
 		return writeEnvelope(envelope{OK: false, Kind: "exec", Error: &errorPayload{Code: "invalid_request", Message: "command is required"}}, *pretty)
@@ -183,13 +217,28 @@ func runExec(args []string) int {
 	}
 
 	logger := newLogger(*verbose)
-	service, _, err := sshops.LoadService(*configPath, logger)
+	runtimeHost := runtimeHostOptions{
+		Target:         *target,
+		User:           *user,
+		Address:        *address,
+		Port:           *port,
+		Password:       *password,
+		PasswordEnv:    *passwordEnv,
+		PrivateKeyPath: *privateKeyPath,
+		Passphrase:     *passphrase,
+		PassphraseEnv:  *passphraseEnv,
+		HostKeyMode:    *hostKeyMode,
+		KnownHostsPath: *knownHostsPath,
+		SaveHost:       *saveHost,
+		SaveName:       *saveName,
+	}
+	service, resolvedHost, cfg, resolvedPath, cfgExists, err := runtimeServiceForHost(*configPath, logger, *host, runtimeHost)
 	if err != nil {
-		return writeEnvelope(envelope{OK: false, Kind: "exec", Error: buildError(err, nil)}, *pretty)
+		return writeEnvelope(envelope{OK: false, Kind: "exec", Error: buildError(err, map[string]interface{}{"config_path": resolvedPath, "config_exists": cfgExists})}, *pretty)
 	}
 
 	request := sshops.ExecRequest{
-		HostID:         *host,
+		HostID:         resolvedHost.ID,
 		Command:        *command,
 		Workdir:        *workdir,
 		Env:            envMap,
@@ -203,16 +252,27 @@ func runExec(args []string) int {
 	if *readStdin {
 		request.Stdin = os.Stdin
 	}
-
 	result, err := service.Exec(context.Background(), request)
 	if err != nil {
 		return writeEnvelope(envelope{
 			OK:      false,
 			Kind:    "exec",
-			Host:    *host,
+			Host:    resolvedHost.ID,
 			Request: buildExecRequestPayload(request, *readStdin),
 			Error:   buildError(err, nil),
 		}, *pretty)
+	}
+
+	if !*dryRun {
+		if err := maybePersistRuntimeHost(resolvedPath, cfg, resolvedHost, runtimeHost); err != nil {
+			return writeEnvelope(envelope{
+				OK:      false,
+				Kind:    "exec",
+				Host:    result.HostID,
+				Request: buildExecRequestPayload(request, *readStdin),
+				Error:   buildError(err, map[string]interface{}{"config_path": resolvedPath}),
+			}, *pretty)
+		}
 	}
 
 	env := envelope{
@@ -245,6 +305,19 @@ func runUpload(args []string) int {
 	timeoutSec := fs.Int("timeout", 0, "operation timeout in seconds")
 	overwrite := fs.Bool("overwrite", false, "overwrite existing remote files")
 	preserveMode := fs.Bool("preserve-mode", false, "preserve file modes")
+	target := fs.String("target", "", "ad-hoc target like user@example.com:22")
+	user := fs.String("user", "", "SSH username for ad-hoc target mode")
+	address := fs.String("address", "", "host or IP for ad-hoc target mode")
+	port := fs.Int("port", 0, "port for ad-hoc target mode")
+	password := fs.String("password", "", "inline password for ad-hoc target mode")
+	passwordEnv := fs.String("password-env", "", "environment variable with password for ad-hoc target mode")
+	privateKeyPath := fs.String("private-key-path", "", "private key path for ad-hoc target mode")
+	passphrase := fs.String("passphrase", "", "inline private key passphrase")
+	passphraseEnv := fs.String("passphrase-env", "", "environment variable with private key passphrase")
+	hostKeyMode := fs.String("host-key-mode", "", "known_hosts or insecure_ignore for ad-hoc target mode")
+	knownHostsPath := fs.String("known-hosts-path", "", "known_hosts path for ad-hoc target mode")
+	saveHost := fs.String("save-host", "", "save the ad-hoc target as a reusable host id after success")
+	saveName := fs.String("save-name", "", "optional display name used with --save-host")
 	dryRun := fs.Bool("dry-run", false, "print the resolved action without executing")
 	pretty := fs.Bool("pretty", false, "pretty-print JSON")
 	verbose := fs.Bool("verbose", false, "write debug logs to stderr")
@@ -252,25 +325,40 @@ func runUpload(args []string) int {
 		return 2
 	}
 
-	if strings.TrimSpace(*host) == "" || strings.TrimSpace(*localPath) == "" || strings.TrimSpace(*remotePath) == "" {
+	if (strings.TrimSpace(*host) == "" && strings.TrimSpace(*target) == "" && strings.TrimSpace(*address) == "") || strings.TrimSpace(*localPath) == "" || strings.TrimSpace(*remotePath) == "" {
 		return writeEnvelope(envelope{
 			OK:   false,
 			Kind: "upload",
 			Error: &errorPayload{
 				Code:    "invalid_request",
-				Message: "host, local, and remote are required",
+				Message: "host or target, local, and remote are required",
 			},
 		}, *pretty)
 	}
 
 	logger := newLogger(*verbose)
-	service, _, err := sshops.LoadService(*configPath, logger)
+	runtimeHost := runtimeHostOptions{
+		Target:         *target,
+		User:           *user,
+		Address:        *address,
+		Port:           *port,
+		Password:       *password,
+		PasswordEnv:    *passwordEnv,
+		PrivateKeyPath: *privateKeyPath,
+		Passphrase:     *passphrase,
+		PassphraseEnv:  *passphraseEnv,
+		HostKeyMode:    *hostKeyMode,
+		KnownHostsPath: *knownHostsPath,
+		SaveHost:       *saveHost,
+		SaveName:       *saveName,
+	}
+	service, resolvedHost, cfg, resolvedPath, _, err := runtimeServiceForHost(*configPath, logger, *host, runtimeHost)
 	if err != nil {
-		return writeEnvelope(envelope{OK: false, Kind: "upload", Error: buildError(err, nil)}, *pretty)
+		return writeEnvelope(envelope{OK: false, Kind: "upload", Error: buildError(err, map[string]interface{}{"config_path": resolvedPath})}, *pretty)
 	}
 
 	request := sshops.UploadRequest{
-		HostID:       *host,
+		HostID:       resolvedHost.ID,
 		LocalPath:    *localPath,
 		RemotePath:   *remotePath,
 		Overwrite:    *overwrite,
@@ -286,10 +374,22 @@ func runUpload(args []string) int {
 		return writeEnvelope(envelope{
 			OK:      false,
 			Kind:    "upload",
-			Host:    *host,
+			Host:    resolvedHost.ID,
 			Request: request,
 			Error:   buildError(err, nil),
 		}, *pretty)
+	}
+
+	if !*dryRun {
+		if err := maybePersistRuntimeHost(resolvedPath, cfg, resolvedHost, runtimeHost); err != nil {
+			return writeEnvelope(envelope{
+				OK:      false,
+				Kind:    "upload",
+				Host:    result.HostID,
+				Request: request,
+				Error:   buildError(err, map[string]interface{}{"config_path": resolvedPath}),
+			}, *pretty)
+		}
 	}
 
 	return writeEnvelope(envelope{
@@ -311,6 +411,19 @@ func runDownload(args []string) int {
 	timeoutSec := fs.Int("timeout", 0, "operation timeout in seconds")
 	overwrite := fs.Bool("overwrite", false, "overwrite existing local files")
 	preserveMode := fs.Bool("preserve-mode", false, "preserve file modes")
+	target := fs.String("target", "", "ad-hoc target like user@example.com:22")
+	user := fs.String("user", "", "SSH username for ad-hoc target mode")
+	address := fs.String("address", "", "host or IP for ad-hoc target mode")
+	port := fs.Int("port", 0, "port for ad-hoc target mode")
+	password := fs.String("password", "", "inline password for ad-hoc target mode")
+	passwordEnv := fs.String("password-env", "", "environment variable with password for ad-hoc target mode")
+	privateKeyPath := fs.String("private-key-path", "", "private key path for ad-hoc target mode")
+	passphrase := fs.String("passphrase", "", "inline private key passphrase")
+	passphraseEnv := fs.String("passphrase-env", "", "environment variable with private key passphrase")
+	hostKeyMode := fs.String("host-key-mode", "", "known_hosts or insecure_ignore for ad-hoc target mode")
+	knownHostsPath := fs.String("known-hosts-path", "", "known_hosts path for ad-hoc target mode")
+	saveHost := fs.String("save-host", "", "save the ad-hoc target as a reusable host id after success")
+	saveName := fs.String("save-name", "", "optional display name used with --save-host")
 	dryRun := fs.Bool("dry-run", false, "print the resolved action without executing")
 	pretty := fs.Bool("pretty", false, "pretty-print JSON")
 	verbose := fs.Bool("verbose", false, "write debug logs to stderr")
@@ -318,25 +431,40 @@ func runDownload(args []string) int {
 		return 2
 	}
 
-	if strings.TrimSpace(*host) == "" || strings.TrimSpace(*localPath) == "" || strings.TrimSpace(*remotePath) == "" {
+	if (strings.TrimSpace(*host) == "" && strings.TrimSpace(*target) == "" && strings.TrimSpace(*address) == "") || strings.TrimSpace(*localPath) == "" || strings.TrimSpace(*remotePath) == "" {
 		return writeEnvelope(envelope{
 			OK:   false,
 			Kind: "download",
 			Error: &errorPayload{
 				Code:    "invalid_request",
-				Message: "host, remote, and local are required",
+				Message: "host or target, remote, and local are required",
 			},
 		}, *pretty)
 	}
 
 	logger := newLogger(*verbose)
-	service, _, err := sshops.LoadService(*configPath, logger)
+	runtimeHost := runtimeHostOptions{
+		Target:         *target,
+		User:           *user,
+		Address:        *address,
+		Port:           *port,
+		Password:       *password,
+		PasswordEnv:    *passwordEnv,
+		PrivateKeyPath: *privateKeyPath,
+		Passphrase:     *passphrase,
+		PassphraseEnv:  *passphraseEnv,
+		HostKeyMode:    *hostKeyMode,
+		KnownHostsPath: *knownHostsPath,
+		SaveHost:       *saveHost,
+		SaveName:       *saveName,
+	}
+	service, resolvedHost, cfg, resolvedPath, _, err := runtimeServiceForHost(*configPath, logger, *host, runtimeHost)
 	if err != nil {
-		return writeEnvelope(envelope{OK: false, Kind: "download", Error: buildError(err, nil)}, *pretty)
+		return writeEnvelope(envelope{OK: false, Kind: "download", Error: buildError(err, map[string]interface{}{"config_path": resolvedPath})}, *pretty)
 	}
 
 	request := sshops.DownloadRequest{
-		HostID:       *host,
+		HostID:       resolvedHost.ID,
 		RemotePath:   *remotePath,
 		LocalPath:    *localPath,
 		Overwrite:    *overwrite,
@@ -352,10 +480,22 @@ func runDownload(args []string) int {
 		return writeEnvelope(envelope{
 			OK:      false,
 			Kind:    "download",
-			Host:    *host,
+			Host:    resolvedHost.ID,
 			Request: request,
 			Error:   buildError(err, nil),
 		}, *pretty)
+	}
+
+	if !*dryRun {
+		if err := maybePersistRuntimeHost(resolvedPath, cfg, resolvedHost, runtimeHost); err != nil {
+			return writeEnvelope(envelope{
+				OK:      false,
+				Kind:    "download",
+				Host:    result.HostID,
+				Request: request,
+				Error:   buildError(err, map[string]interface{}{"config_path": resolvedPath}),
+			}, *pretty)
+		}
 	}
 
 	return writeEnvelope(envelope{
@@ -463,6 +603,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  config           Manage the local ssh-ops config file")
+	fmt.Fprintln(w, "  host             Shortcuts for saving and managing common hosts")
 	fmt.Fprintln(w, "  list-hosts       List configured SSH hosts")
 	fmt.Fprintln(w, "  exec             Run a remote shell command")
 	fmt.Fprintln(w, "  upload           Upload a local file or directory over SFTP")
