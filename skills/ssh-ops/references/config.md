@@ -2,52 +2,46 @@
 
 ## 先看推荐工作流
 
-对大多数用户来说，推荐工作流不是手改 YAML，也不是先学一堆 `config` 子命令，而是：
+对大多数用户来说，推荐工作流现在是：
 
-1. 一次性任务先直接 `--target`
-2. 常用机器再用 `sshctl host add`
-3. 只有进阶场景再用 `sshctl config ...`
+1. 先 `sshctl add`
+2. 日常只记 `sshctl list`、`sshctl test`、`sshctl run`
+3. 一次性任务再用 `sshctl run --target ...`
+4. 只有进阶场景才去看 `sshctl host ...` 和 `sshctl config ...`
 
 也就是说，配置文件现在应该是“后台细节”，不是“上手第一步”。
 
 最短示例：
 
 ```bash
-sshctl exec \
-  --target root@192.168.1.9 \
-  --password-env SSH_OPS_TEST_PASSWORD \
-  --host-key-mode insecure_ignore \
-  --command "df -h" \
-  --pretty
+sshctl add
 ```
 
-保存常用机器：
+保存之后直接：
 
 ```bash
-sshctl host add prod deploy@203.0.113.10 \
-  --private-key-path ~/.ssh/id_ed25519 \
-  --host-key-mode known_hosts \
-  --workdir /srv/app \
-  --pretty
-```
-
-以后再用：
-
-```bash
-sshctl exec --host prod --command "df -h" --pretty
+sshctl list
+sshctl test prod
+sshctl run prod "df -h"
 ```
 
 ## 当前已经可用的入口
 
 ### 更短的人类命令
 
+- `sshctl add`
+- `sshctl list`
+- `sshctl show [id]`
+- `sshctl test <id>`
+- `sshctl run <id> "command"`
+
+### 次级入口
+
 - `sshctl host ls`
 - `sshctl host show [id]`
 - `sshctl host add <id> <target>`
 - `sshctl host rm <id>`
 - `sshctl host rename <old> <new>`
-
-### 进阶配置命令
 
 - `sshctl config path`
   查看当前生效的配置路径。
@@ -81,22 +75,22 @@ sshctl exec --host prod --command "df -h" --pretty
 直接用 `--target`，不要先创建配置：
 
 ```bash
-sshctl exec --target root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --host-key-mode insecure_ignore --command "uname -a" --pretty
+sshctl run --target root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --host-key-mode insecure_ignore "uname -a"
 ```
 
 ### 保存一台常用机器
 
-优先用 `host add`：
+优先直接跑 `add` 向导：
 
 ```bash
-sshctl host add prod deploy@203.0.113.10 --private-key-path ~/.ssh/id_ed25519 --host-key-mode known_hosts --pretty
+sshctl add
 ```
 
 ### 看看目前保存了哪些机器
 
 ```bash
-sshctl host ls --pretty
-sshctl host show --pretty
+sshctl list
+sshctl show prod
 ```
 
 ## 管理命令说明

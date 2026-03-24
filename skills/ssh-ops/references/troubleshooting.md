@@ -23,7 +23,19 @@ go build -o ./bin/sshctl ./cmd/sshctl
 
 ## 找不到配置文件
 
-先直接执行：
+如果你只是想先用起来，不一定要先管配置文件：
+
+```bash
+sshctl add
+```
+
+或者直接：
+
+```bash
+sshctl run --target root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --host-key-mode insecure_ignore "uname -a"
+```
+
+如果你就是要看配置路径，再执行：
 
 ```bash
 sshctl config path --pretty
@@ -35,7 +47,7 @@ sshctl config path --pretty
 sshctl config init --pretty
 ```
 
-如果你想一步到位把机器加进去，也可以直接执行 `sshctl config add-host ...`，它会自动创建默认配置文件。
+如果你想一步到位把机器加进去，也可以直接执行 `sshctl add` 或 `sshctl host add ...`，它们都会自动创建默认配置文件。
 
 再按现有规则排查：
 
@@ -56,7 +68,8 @@ cp ./examples/config.example.yaml ~/.config/ssh-ops/config.yaml
 先直接执行：
 
 ```bash
-sshctl config show --pretty
+sshctl list
+sshctl show prod
 ```
 
 如果还需要继续排查：

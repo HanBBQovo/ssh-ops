@@ -64,10 +64,20 @@ func run(args []string) int {
 	}
 
 	switch args[0] {
+	case "add":
+		return runAdd(args[1:])
 	case "config":
 		return runConfig(args[1:])
 	case "host":
 		return runHost(args[1:])
+	case "list":
+		return runList(args[1:])
+	case "show":
+		return runShow(args[1:])
+	case "test":
+		return runTest(args[1:])
+	case "run":
+		return runRun(args[1:])
 	case "list-hosts":
 		return runListHosts(args[1:])
 	case "exec":
@@ -600,6 +610,13 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  sshctl <subcommand> [flags]")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Easy commands:")
+	fmt.Fprintln(w, "  add              Interactive wizard to add a server")
+	fmt.Fprintln(w, "  list             List saved servers")
+	fmt.Fprintln(w, "  show             Show one saved server")
+	fmt.Fprintln(w, "  test             Test whether a saved server or direct target is reachable")
+	fmt.Fprintln(w, "  run              Run a command on a saved server or direct target")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  config           Manage the local ssh-ops config file")

@@ -4,15 +4,28 @@
 
 这些示例对应当前已经稳定存在的脚本和命令。
 
+## 最短路径：交互式添加
+
+```bash
+sshctl add
+```
+
+## 添加后最常用的三个命令
+
+```bash
+sshctl list
+sshctl test prod
+sshctl run prod "df -h"
+```
+
 ## 最短路径：直接连一台机器
 
 ```bash
-scripts/ssh_exec.sh \
+sshctl run \
   --target root@192.168.1.9 \
   --password-env SSH_OPS_TEST_PASSWORD \
   --host-key-mode insecure_ignore \
-  --command "df -h" \
-  --pretty
+  "df -h"
 ```
 
 ## 把这台机器保存成别名
@@ -75,7 +88,7 @@ scripts/ssh_upload.sh \
 
 ## 配置管理示例
 
-下面这些命令已经可用，但它们更偏“进阶配置管理”。新手优先用上面的 `--target` 和 `sshctl host add`。
+下面这些命令已经可用，但它们更偏“进阶配置管理”。新手优先用上面的 `sshctl add`、`sshctl list`、`sshctl test`、`sshctl run`。
 
 ## 查看当前配置路径
 

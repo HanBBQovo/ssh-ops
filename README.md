@@ -42,29 +42,23 @@
 
 ## 核心能力
 
-`sshctl` 当前稳定提供两组能力：
+`sshctl` 当前稳定提供四组能力：
 
-### 1. 零配置直连
+### 1. 交互式添加
 
-- `exec --target ...`
-  直接对 `user@ip[:port]` 执行命令，不必先建配置文件。
-- `upload --target ...`
-  直接上传文件到一台尚未保存的机器。
-- `download --target ...`
-  直接从一台尚未保存的机器下载文件。
+- `add`
+  一步一步问你服务器信息，保存后还能顺手测试连接。
 
-### 2. 常用机器管理
+### 2. 人类能记住的日常命令
 
-- `host add <id> <target>`
-  用最短命令保存一台常用机器。
-- `host ls`
-  列出已保存的机器。
-- `host show [id]`
-  看全部机器或某一台机器。
-- `host rm <id>`
-  删除一个已保存的机器。
-- `host rename <old> <new>`
-  重命名一个已保存的机器。
+- `list`
+  把你保存过的服务器列出来。
+- `show`
+  看某一台服务器的详情。
+- `test`
+  一键测试能不能连通。
+- `run`
+  在服务器上执行命令。
 
 ### 3. 进阶配置管理
 
@@ -83,7 +77,7 @@
 - `config rename-host`
   重命名 host id 或显示名称。
 
-### 4. 远端操作
+### 4. 底层远端操作
 
 - `list-hosts`
   列出当前配置中的主机别名。
@@ -102,38 +96,42 @@
 
 ## 最简单的用法
 
-先别想配置文件。这个工具现在应该先这样用：
+先别想 YAML，也别先记一堆 flags。
 
-### 1. 临时连一台机器，不保存
+### 1. 第一次使用，直接交互式添加
 
 ```bash
-sshctl exec \
+sshctl add
+```
+
+它会一步一步问你：
+
+- 服务器名字
+- 地址或 IP
+- 登录用户
+- 端口
+- 用私钥还是密码
+- 要不要立即测试连接
+
+### 2. 添加完之后，就记这三个命令
+
+```bash
+sshctl list
+sshctl test prod
+sshctl run prod "df -h"
+```
+
+### 3. 如果只是临时连一下，也可以不保存
+
+```bash
+sshctl run \
   --target root@192.168.1.9:22 \
   --password-env SSH_OPS_TEST_PASSWORD \
   --host-key-mode insecure_ignore \
-  --command "df -h" \
-  --pretty
+  "df -h"
 ```
 
-### 2. 把这台机器保存成别名，以后反复用
-
-```bash
-sshctl host add prod deploy@203.0.113.10 \
-  --private-key-path ~/.ssh/id_ed25519 \
-  --host-key-mode known_hosts \
-  --workdir /srv/app \
-  --name "生产环境" \
-  --pretty
-```
-
-以后就直接：
-
-```bash
-sshctl exec --host prod --command "df -h" --pretty
-sshctl upload --host prod --local ./dist/app.tar.gz --remote /tmp/app.tar.gz --pretty
-```
-
-只有你需要批量调整、看底层细节、或者排障时，才需要去看 `sshctl config ...`。
+只有你需要批量调整、看底层细节、或者排障时，才需要去看 `sshctl config ...` 或 `sshctl host ...`。
 
 其中 `target` 支持这种形式：
 
@@ -254,61 +252,67 @@ export SSH_OPS_CLI="$HOME/.local/bin/sshctl"
 
 推荐顺序现在改成这样：
 
-1. 一次性任务：直接 `--target`
-2. 常用机器：`sshctl host add`
-3. 只有进阶场景再用 `sshctl config ...`
+1. 新用户：先 `sshctl add`
+2. 日常使用：`sshctl list` / `sshctl test` / `sshctl run`
+3. 一次性任务：直接 `sshctl run --target ...`
+4. 只有进阶场景再用 `sshctl host ...` 或 `sshctl config ...`
 
-如果你只是想“把我的机器加进去”，最短路径不是 `config add-host`，而是：
+如果你只是想“把我的机器加进去”，现在最短路径就是：
 
 ```bash
-sshctl host add prod deploy@203.0.113.10:22 \
-  --private-key-path ~/.ssh/id_ed25519 \
-  --host-key-mode known_hosts \
-  --workdir /srv/app \
-  --name "生产环境" \
-  --pretty
-
-sshctl validate-config --pretty
-sshctl list-hosts --pretty
+sshctl add
 ```
 
-如果你用密码而不是私钥，可以把 `--private-key-path` 换成：
+保存完成后就直接：
 
 ```bash
---password-env SSH_OPS_PROD_PASSWORD
+sshctl list
+sshctl test prod
+sshctl run prod "df -h"
 ```
 
 如果你根本不想先保存主机，直接：
 
 ```bash
-sshctl exec \
+sshctl run \
   --target root@192.168.1.9 \
   --password-env SSH_OPS_TEST_PASSWORD \
   --host-key-mode insecure_ignore \
-  --command "uname -a" \
-  --pretty
+  "uname -a"
 ```
 
-如果你还没有配置文件，也没关系，`host add` / `config add-host` 都会自动创建默认配置文件。
+如果你还没有配置文件，也没关系，`add` / `host add` / `config add-host` 都会自动创建默认配置文件。
 
 ### 更短的主机管理命令
 
 #### 新增常用机器
 
 ```bash
-sshctl host add prod deploy@203.0.113.10 --private-key-path ~/.ssh/id_ed25519 --host-key-mode known_hosts --pretty
+sshctl add
 ```
 
 #### 看所有机器
 
 ```bash
-sshctl host ls --pretty
+sshctl list
 ```
 
 #### 看某一台机器
 
 ```bash
-sshctl host show prod --pretty
+sshctl show prod
+```
+
+#### 测试连接
+
+```bash
+sshctl test prod
+```
+
+#### 执行命令
+
+```bash
+sshctl run prod "df -h"
 ```
 
 #### 删除机器
@@ -427,43 +431,42 @@ hosts:
 
 这是最直接、也最容易调试的方式。
 
-#### 1. 最短路径：不配置，直接连
+#### 1. 先交互式添加一台机器
 
 ```bash
-sshctl exec \
+sshctl add
+```
+
+#### 2. 看看你加了哪些机器
+
+```bash
+sshctl list
+sshctl show prod
+```
+
+#### 3. 测试一下能不能连
+
+```bash
+sshctl test prod
+```
+
+#### 4. 执行命令
+
+```bash
+sshctl run prod "uname -a"
+```
+
+#### 5. 一次性直连，不保存
+
+```bash
+sshctl run \
   --target root@192.168.1.9 \
   --password-env SSH_OPS_TEST_PASSWORD \
   --host-key-mode insecure_ignore \
-  --command "df -h" \
-  --pretty
+  "df -h"
 ```
 
-#### 2. 如果要长期使用，再保存成别名
-
-```bash
-sshctl host add prod deploy@203.0.113.10:22 \
-  --private-key-path ~/.ssh/id_ed25519 \
-  --host-key-mode known_hosts \
-  --workdir /srv/app \
-  --pretty
-```
-
-#### 3. 查看主机别名
-
-```bash
-sshctl host ls --pretty
-sshctl list-hosts --pretty
-```
-
-#### 4. 校验配置
-
-改完配置后建议跑一次：
-
-```bash
-sshctl validate-config --pretty
-```
-
-#### 5. 远程执行命令
+#### 6. 如果你更喜欢底层命令，也还保留着
 
 ```bash
 sshctl exec --host prod --command "uname -a" --pretty
@@ -480,7 +483,7 @@ sshctl exec \
   --pretty
 ```
 
-#### 6. 上传文件
+#### 7. 上传文件
 
 ```bash
 sshctl upload \
@@ -490,7 +493,7 @@ sshctl upload \
   --pretty
 ```
 
-#### 7. 下载文件
+#### 8. 下载文件
 
 ```bash
 sshctl download \
@@ -625,13 +628,25 @@ make validate-skill
 
 ### 2. 配置文件找不到
 
-先直接执行：
+如果你只是想赶紧用，不一定要先管配置文件。可以直接：
+
+```bash
+sshctl add
+```
+
+或者：
+
+```bash
+sshctl run --target root@192.168.1.9 --password-env SSH_OPS_TEST_PASSWORD --host-key-mode insecure_ignore "uname -a"
+```
+
+如果你就是要查配置路径，再执行：
 
 ```bash
 sshctl config path --pretty
 ```
 
-如果配置文件还不存在，初始化它：
+如果配置文件还不存在，也可以初始化它：
 
 ```bash
 sshctl config init --pretty
