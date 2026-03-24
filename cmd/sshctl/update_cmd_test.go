@@ -8,7 +8,7 @@ import (
 
 func TestBuildUpdateCommand(t *testing.T) {
 	command, label := buildUpdateCommand(installTargets{Codex: true, Claude: true}, "v0.1.4")
-	if label != "Codex + Claude Code" {
+	if label != "ssh-ops（Codex + Claude Code）" {
 		t.Fatalf("unexpected label: %q", label)
 	}
 	if runtime.GOOS == "windows" {
@@ -36,5 +36,17 @@ func TestResolveInstallTargets(t *testing.T) {
 	targets = resolveInstallTargets(installTargets{Codex: true}, false, false, false)
 	if !targets.Codex || targets.Claude {
 		t.Fatalf("expected detected Codex target, got %#v", targets)
+	}
+}
+
+func TestDescribeInstallTargets(t *testing.T) {
+	if got := describeInstallTargets(installTargets{Codex: true}); got != "ssh-ops 已安装到 Codex" {
+		t.Fatalf("unexpected codex description: %q", got)
+	}
+	if got := describeInstallTargets(installTargets{Claude: true}); got != "ssh-ops 已安装到 Claude Code" {
+		t.Fatalf("unexpected claude description: %q", got)
+	}
+	if got := describeInstallTargets(installTargets{}); got != "未检测到 ssh-ops skill 安装目录" {
+		t.Fatalf("unexpected empty description: %q", got)
 	}
 }

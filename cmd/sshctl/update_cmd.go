@@ -102,17 +102,17 @@ func statExists(path string) bool {
 
 func buildUpdateCommand(targets installTargets, versionTag string) (string, string) {
 	mode := "--codex"
-	label := "Codex（默认）"
+	label := "ssh-ops（Codex，默认）"
 	switch {
 	case targets.Codex && targets.Claude:
 		mode = "--all"
-		label = "Codex + Claude Code"
+		label = "ssh-ops（Codex + Claude Code）"
 	case targets.Claude:
 		mode = "--claude"
-		label = "Claude Code"
+		label = "ssh-ops（Claude Code）"
 	case targets.Codex:
 		mode = "--codex"
-		label = "Codex"
+		label = "ssh-ops（Codex）"
 	}
 
 	if runtime.GOOS == "windows" {
@@ -141,12 +141,12 @@ func buildUpdateCommand(targets installTargets, versionTag string) (string, stri
 func describeInstallTargets(targets installTargets) string {
 	switch {
 	case targets.Codex && targets.Claude:
-		return "Codex + Claude Code"
+		return "ssh-ops 已安装到 Codex + Claude Code"
 	case targets.Codex:
-		return "Codex"
+		return "ssh-ops 已安装到 Codex"
 	case targets.Claude:
-		return "Claude Code"
+		return "ssh-ops 已安装到 Claude Code"
 	default:
-		return "未检测到"
+		return "未检测到 ssh-ops skill 安装目录"
 	}
 }

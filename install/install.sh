@@ -138,10 +138,25 @@ copy_example_config() {
   fi
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LOCAL_SKILL_DIR="${REPO_ROOT}/skills/ssh-ops"
-LOCAL_CONFIG_EXAMPLE="${REPO_ROOT}/examples/config.example.yaml"
+REPO_ROOT=""
+LOCAL_SKILL_DIR=""
+LOCAL_CONFIG_EXAMPLE=""
+
+init_local_source_paths() {
+  if [[ -n "$REPO_ROOT" ]]; then
+    return 0
+  fi
+
+  local script_dir source_path
+  source_path="${BASH_SOURCE[0]-}"
+  if [[ -z "$source_path" || "$source_path" == "bash" || "$source_path" == "-bash" ]]; then
+    fail "--local-source/--local-build 需要从仓库里的 install/install.sh 执行，不能通过 stdin 使用"
+  fi
+  script_dir="$(cd "$(dirname "$source_path")" && pwd)"
+  REPO_ROOT="$(cd "${script_dir}/.." && pwd)"
+  LOCAL_SKILL_DIR="${REPO_ROOT}/skills/ssh-ops"
+  LOCAL_CONFIG_EXAMPLE="${REPO_ROOT}/examples/config.example.yaml"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -182,8 +197,11 @@ if [[ "$INSTALL_CODEX" == false && "$INSTALL_CLAUDE" == false ]]; then
   INSTALL_CODEX=true
 fi
 
-if [[ "$LOCAL_SOURCE" == true && ! -d "$LOCAL_SKILL_DIR" ]]; then
-  fail "--local-source/--local-build 需要在仓库目录中运行"
+if [[ "$LOCAL_SOURCE" == true ]]; then
+  init_local_source_paths
+  if [[ ! -d "$LOCAL_SKILL_DIR" ]]; then
+    fail "--local-source/--local-build 需要在仓库目录中运行"
+  fi
 fi
 
 OS="$(detect_os)"
