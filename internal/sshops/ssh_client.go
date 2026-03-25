@@ -51,9 +51,24 @@ func buildAuthMethods(host *HostConfig) ([]ssh.AuthMethod, error) {
 	}
 	if host.Auth.Password != "" {
 		methods = append(methods, ssh.Password(host.Auth.Password))
+		methods = append(methods, ssh.KeyboardInteractive(passwordKeyboardInteractive(host.Auth.Password)))
 	}
 
 	return methods, nil
+}
+
+func passwordKeyboardInteractive(password string) ssh.KeyboardInteractiveChallenge {
+	return func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+		if len(questions) == 0 {
+			return []string{}, nil
+		}
+
+		answers := make([]string, len(questions))
+		for i := range answers {
+			answers[i] = password
+		}
+		return answers, nil
+	}
 }
 
 func loadPrivateKey(host *HostConfig) (ssh.Signer, error) {
