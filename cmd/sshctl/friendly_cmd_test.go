@@ -48,6 +48,42 @@ func TestRunAddInteractiveWizard(t *testing.T) {
 	}
 }
 
+func TestRunAddInteractiveWizardPreservesPasswordWithDollarSigns(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	password := "IHBczrc!%@#$@"
+	input := strings.Join([]string{
+		"prod",
+		"生产环境",
+		"203.0.113.10",
+		"deploy",
+		"",
+		"3",
+		password,
+		"2",
+		"",
+		"n",
+		"",
+	}, "\n")
+
+	exitCode, stdout, stderr := captureIO(t, input, func() int {
+		return run([]string{"add", "--config", configPath})
+	})
+	if exitCode != 0 {
+		t.Fatalf("add exit code = %d, stdout = %s, stderr = %s", exitCode, stdout, stderr)
+	}
+
+	cfg, err := sshops.LoadConfigFile(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfigFile() error = %v", err)
+	}
+	if len(cfg.Hosts) != 1 {
+		t.Fatalf("expected one host, got %d", len(cfg.Hosts))
+	}
+	if cfg.Hosts[0].Auth.Password != password {
+		t.Fatalf("expected password %q, got %q", password, cfg.Hosts[0].Auth.Password)
+	}
+}
+
 func TestRunHumanCommandsWithDryRun(t *testing.T) {
 	exitCode, stdout, stderr := captureIO(t, "", func() int {
 		return run([]string{

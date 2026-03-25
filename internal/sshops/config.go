@@ -139,11 +139,11 @@ func (c *Config) Normalize() error {
 			host.Port = 22
 		}
 
-		host.Auth.Password = expandEnv(host.Auth.Password)
+		host.Auth.Password = strings.TrimSpace(host.Auth.Password)
 		host.Auth.PasswordEnv = strings.TrimSpace(expandEnv(host.Auth.PasswordEnv))
-		host.Auth.PrivateKey = expandEnv(host.Auth.PrivateKey)
+		host.Auth.PrivateKey = strings.TrimSpace(host.Auth.PrivateKey)
 		host.Auth.PrivateKeyPath = expandPath(host.Auth.PrivateKeyPath)
-		host.Auth.Passphrase = expandEnv(host.Auth.Passphrase)
+		host.Auth.Passphrase = strings.TrimSpace(host.Auth.Passphrase)
 		host.Auth.PassphraseEnv = strings.TrimSpace(expandEnv(host.Auth.PassphraseEnv))
 
 		if host.Auth.Password == "" && host.Auth.PasswordEnv != "" {

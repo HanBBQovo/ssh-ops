@@ -104,3 +104,76 @@ func TestNormalizeAllowsEmptyHosts(t *testing.T) {
 		t.Fatalf("expected no hosts, got %d", len(cfg.Hosts))
 	}
 }
+
+func TestNormalizeConfigPreservesInlineSecretsWithDollarSigns(t *testing.T) {
+	cfg := Config{
+		Hosts: []HostConfig{
+			{
+				ID:      "prod",
+				Address: "127.0.0.1",
+				User:    "root",
+				Auth: AuthConfig{
+					Password:   "IHBczrc!%@#$@",
+					Passphrase: "key-pass$@word",
+					PrivateKey: "-----BEGIN KEY-----\n$KEEP_ME\n-----END KEY-----",
+				},
+				HostKey: HostKeyConfig{
+					Mode: "insecure_ignore",
+				},
+			},
+		},
+	}
+
+	if err := cfg.Normalize(); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+
+	if cfg.Hosts[0].Auth.Password != "IHBczrc!%@#$@" {
+		t.Fatalf("expected password to stay unchanged, got %q", cfg.Hosts[0].Auth.Password)
+	}
+	if cfg.Hosts[0].Auth.Passphrase != "key-pass$@word" {
+		t.Fatalf("expected passphrase to stay unchanged, got %q", cfg.Hosts[0].Auth.Passphrase)
+	}
+	if cfg.Hosts[0].Auth.PrivateKey != "-----BEGIN KEY-----\n$KEEP_ME\n-----END KEY-----" {
+		t.Fatalf("expected private key to stay unchanged, got %q", cfg.Hosts[0].Auth.PrivateKey)
+	}
+}
+
+func TestNormalizeConfigExpandsBareAndBracedEnvInNonSecretFields(t *testing.T) {
+	t.Setenv("SSH_OPS_TEST_HOST", "203.0.113.10")
+	t.Setenv("SSH_OPS_TEST_USER", "deploy")
+	t.Setenv("SSH_OPS_TEST_WORKDIR", "/srv/app")
+
+	cfg := Config{
+		Hosts: []HostConfig{
+			{
+				ID:      "prod",
+				Address: "$SSH_OPS_TEST_HOST",
+				User:    "${SSH_OPS_TEST_USER}",
+				Auth: AuthConfig{
+					PasswordEnv: "SSH_OPS_TEST_PASSWORD",
+				},
+				HostKey: HostKeyConfig{
+					Mode: "insecure_ignore",
+				},
+				Defaults: HostDefaults{
+					Workdir: "$SSH_OPS_TEST_WORKDIR",
+				},
+			},
+		},
+	}
+
+	if err := cfg.Normalize(); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+
+	if cfg.Hosts[0].Address != "203.0.113.10" {
+		t.Fatalf("expected expanded address, got %q", cfg.Hosts[0].Address)
+	}
+	if cfg.Hosts[0].User != "deploy" {
+		t.Fatalf("expected expanded user, got %q", cfg.Hosts[0].User)
+	}
+	if cfg.Hosts[0].Defaults.Workdir != "/srv/app" {
+		t.Fatalf("expected expanded workdir, got %q", cfg.Hosts[0].Defaults.Workdir)
+	}
+}
